@@ -1,4 +1,5 @@
 from src.building import Building, BuildingBlueprint
+from src.blueprints import BLUEPRINTS
 from src.constants import Color
 from src.renderer import Renderer
 from src.camera import Camera
@@ -56,3 +57,24 @@ def test_renderer_uses_progress(monkeypatch):
 
     assert captured["glyphs"][0][0] == "Z"
     assert captured["colors"][0][0] == Color.UI
+
+
+def test_road_orientation(monkeypatch):
+    gmap = GameMap(seed=1)
+    renderer = Renderer()
+    camera = Camera()
+    camera.set_zoom_level(0)
+    camera.x = 0
+    camera.y = 0
+    road_bp = BLUEPRINTS["Road"]
+    r1 = Building(road_bp, (0, 0), progress=road_bp.build_time)
+    r2 = Building(road_bp, (1, 0), progress=road_bp.build_time)
+    captured = {}
+
+    def fake_draw(g, c):
+        captured["glyphs"] = g
+
+    monkeypatch.setattr(renderer, "draw_grid", fake_draw)
+    renderer.render_game(gmap, camera, [], [r1, r2], detailed=False)
+    assert captured["glyphs"][0][0] == "-"
+    assert captured["glyphs"][0][1] == "-"
