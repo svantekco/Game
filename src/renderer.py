@@ -159,9 +159,15 @@ class Renderer:
 
     def render_status(self, text: str) -> None:
         """Render a status line at the bottom of the screen."""
-        line = text.ljust(self.term.width)
         if self.use_curses:
-            self.term.addstr(STATUS_PANEL_Y, 0, line[: self.term.width])
+            height, width = self.term.getmaxyx()
+        else:
+            width = self.term.width
+
+        line = text.ljust(width)
+
+        if self.use_curses:
+            self.term.addstr(STATUS_PANEL_Y, 0, line[:width])
             self.term.refresh()
         else:
             sys.stdout.write(self.term.move_xy(0, STATUS_PANEL_Y) + line)
