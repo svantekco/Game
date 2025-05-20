@@ -250,13 +250,14 @@ class Renderer:
             sys.stdout.write(self.term.move_xy(0, STATUS_PANEL_Y) + line)
             sys.stdout.flush()
 
-    def render_help(self, lines: list[str]) -> None:
-        """Overlay help text starting at the top-left."""
+    def render_help(self, lines: list[str], start_y: int = 0) -> None:
+        """Render help text starting at ``start_y``."""
         for idx, line in enumerate(lines):
+            y = start_y + idx
             if self.use_curses:
-                self.term.addstr(idx, 0, line)
+                self.term.addstr(y, 0, line)
             else:
-                sys.stdout.write(self.term.move_xy(0, idx) + line)
+                sys.stdout.write(self.term.move_xy(0, y) + line)
         if self.use_curses:
             self.term.refresh()
         else:
