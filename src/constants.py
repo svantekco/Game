@@ -43,6 +43,8 @@ class Color(Enum):
     TREE = auto()
     ROCK = auto()
     WATER = auto()
+    PATH = auto()
+    BUILDING = auto()
     UI = auto()
 
 
