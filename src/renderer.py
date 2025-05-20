@@ -1,15 +1,22 @@
 from __future__ import annotations
 
 import sys
+from typing import TYPE_CHECKING
 
 from .constants import Color, TileType
 
 try:
     from blessed import Terminal
+
     _HAS_BLESSED = True
 except Exception:  # pragma: no cover - fallback if blessed is missing
     import curses
+
     _HAS_BLESSED = False
+
+if TYPE_CHECKING:  # pragma: no cover - import types for checking only
+    from .game import Villager, Camera
+    from .map import GameMap
 
 
 class Renderer:
@@ -109,7 +116,9 @@ class Renderer:
 
         # Overlay buildings
         for b in buildings:
-            for bx, by in getattr(b, "cells", lambda: [(b.position[0], b.position[1])])():
+            for bx, by in getattr(
+                b, "cells", lambda: [(b.position[0], b.position[1])]
+            )():
                 sx, sy = camera.world_to_screen(bx, by)
                 if 0 <= sy < len(glyph_grid) and 0 <= sx < len(glyph_grid[0]):
                     glyph_grid[sy][sx] = b.blueprint.glyph
