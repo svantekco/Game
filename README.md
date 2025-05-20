@@ -17,8 +17,8 @@ Powered by the **blessed** TUI library (with a curses fallback), VillageSim runs
 * **Procedural Worlds** – Seedable generator carves out a diverse, resource‑rich landscape every run.
 * **Smooth ASCII Rendering** – Panning and zoom deliver crisp visuals at multiple levels of detail.
 * **Autonomous Villagers** – Agents gather, build, and deliver via an A\* path‑finding engine you can watch in real time.
-* **Dynamic Construction** – Town Halls, Lumberyards, Farms and Houses emerge where resources allow, triggering population growth.
-* **Resource Economy** – Wood, stone and food flow through inventories, storage, and building queues.
+* **Dynamic Construction** – Town Halls, Lumberyards, Houses, and Watchtowers emerge where resources allow, triggering population growth.
+* **Resource Economy** – Wood and stone flow through inventories, storage, and building queues.
 * **HUD & Controls** – Real‑time stats panel plus hotkeys for pause, step, help, and camera centring.
 * **Extensible & Test‑Backed** – Modular architecture, unit tests, and CI workflow encourage contribution and experimentation.
 
@@ -74,7 +74,7 @@ and population. Use `--show-fps` to display performance metrics.
 11. **Resource & inventory system** – Per‑agent inventory and global storage.
 12. **Gathering & delivery behaviours** – FSM: GATHER → DELIVER → IDLE.
 13. **Job dispatcher & FSM transitions** – Centralised job queue.
-14. **Building blueprints & instances** – TownHall, Lumberyard.
+14. **Building blueprints & instances** – TownHall, Lumberyard, Watchtower.
 15. **Construction queue & placement** – Auto‑placement helper, BUILD state.
 16. **Lumberyard auto‑expansion** – Resource‑driven growth logic.
 17. **House & population growth** – Housing cap and villager spawning.
