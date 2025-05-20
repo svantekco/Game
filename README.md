@@ -46,7 +46,7 @@ $ python3 -m src.main [--seed 42] [--show-fps] [-v]
 
 | Key       | Action           |
 | --------- | ---------------- |
-| ← ↑ ↓ →   | Pan camera       |
+| WASD      | Pan camera       |
 | `+` / `-` | Zoom in / out    |
 | `space`   | Pause / Unpause  |
 | `.`       | Single‑step tick |
