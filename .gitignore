@@ -1,2 +1,26 @@
-venv/
+# Byte-compiled / optimized / dependency files
 __pycache__/
+*.py[cod]
+*.so
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Test, coverage and logs
+.pytest_cache/
+.cache/
+*.log
+
+# IDE directories
+.vscode/
+.idea/
+
+# MacOS files
+.DS_Store
