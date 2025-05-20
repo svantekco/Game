@@ -757,7 +757,7 @@ class Game:
         if self.show_fps:
             status += f" FPS:{self.current_fps:.1f} ({self.last_tick_ms:.1f}ms)"
         self.renderer.render_status(status)
-        overlay_start = 0
+        overlay_start = STATUS_PANEL_Y + 1
         if self.show_help:
             lines = [
                 "Controls:",
@@ -772,8 +772,8 @@ class Game:
                 "1-9 - set zoom",
                 "A - toggle actions",
             ]
-            self.renderer.render_help(lines)
-            overlay_start = len(lines)
+            self.renderer.render_help(lines, start_y=overlay_start)
+            overlay_start += len(lines)
 
         if self.show_buildings:
             counts: Dict[str, int] = defaultdict(int)
@@ -794,5 +794,4 @@ class Game:
 
         if self.show_actions:
             lines = [f"Villager {v.id}: {v.state}" for v in self.entities]
-            start_y = max(0, STATUS_PANEL_Y - len(lines))
-            self.renderer.render_overlay(lines, start_y=start_y)
+            self.renderer.render_overlay(lines, start_y=overlay_start)
