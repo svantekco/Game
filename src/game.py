@@ -83,7 +83,17 @@ class Villager:
                 return
             if self.target_resource and self.position == self.target_resource:
                 tile = game.map.get_tile(*self.position)
-                gained = tile.extract(1)
+                rate = 1
+                for b in game.buildings:
+                    if b.blueprint.name == "Quarry" and b.complete:
+                        bx, by = b.position
+                        if (
+                            abs(bx - self.position[0]) <= 5
+                            and abs(by - self.position[1]) <= 5
+                        ):
+                            rate = 2
+                            break
+                gained = tile.extract(rate)
                 if self.resource_type is TileType.ROCK:
                     self.inventory["stone"] += gained
                 else:
@@ -179,6 +189,15 @@ class Game:
                 color=Color.BUILDING,
                 wood=10,
                 stone=0,
+            ),
+            "Quarry": BuildingBlueprint(
+                name="Quarry",
+                build_time=12,
+                footprint=[(0, 0)],
+                glyph="Q",
+                color=Color.BUILDING,
+                wood=10,
+                stone=10,
             ),
             "House": BuildingBlueprint(
                 name="House",
@@ -320,22 +339,37 @@ class Game:
                     q.append((nx, ny))
         return origin
 
+    def _count_resource_nearby(
+        self, origin: Tuple[int, int], resource: TileType, radius: int
+    ) -> int:
+        """Count resource tiles of type ``resource`` within ``radius``."""
+        count = 0
+        for dx in range(-radius, radius + 1):
+            for dy in range(-radius, radius + 1):
+                x, y = origin[0] + dx, origin[1] + dy
+                if not (0 <= x < self.map.width and 0 <= y < self.map.height):
+                    continue
+                tile = self.map.get_tile(x, y)
+                if tile.type is resource and tile.resource_amount > 0:
+                    count += 1
+        return count
+
     # --- Building Helpers --------------------------------------------
     def is_area_free(
         self, origin: Tuple[int, int], blueprint: BuildingBlueprint
     ) -> bool:
-        for dx, dy in blueprint.footprint:
-            x = origin[0] + dx
-            y = origin[1] + dy
+        cells = [(origin[0] + dx, origin[1] + dy) for dx, dy in blueprint.footprint]
+        for x, y in cells:
             if not (0 <= x < self.map.width and 0 <= y < self.map.height):
                 return False
             if not self.map.get_tile(x, y).passable:
                 return False
-            for b in self.buildings:
-                for cx, cy in getattr(
-                    b, "cells", lambda: [(b.position[0], b.position[1])]
-                )():
-                    if cx == x and cy == y:
+        for b in self.buildings:
+            for cx, cy in getattr(
+                b, "cells", lambda: [(b.position[0], b.position[1])]
+            )():
+                for x, y in cells:
+                    if abs(cx - x) <= 2 and abs(cy - y) <= 2:
                         return False
         return True
 
@@ -358,6 +392,35 @@ class Game:
                     return cand
                 q.append(cand)
         return None
+
+    def find_quarry_site(
+        self, blueprint: BuildingBlueprint
+    ) -> Optional[Tuple[int, int]]:
+        """Find a quarry site near existing buildings prioritising stone density."""
+        from collections import deque
+
+        starts = [b.position for b in self.buildings] or [self.storage_pos]
+        visited = set(starts)
+        q = deque(starts)
+        best: Tuple[int, int] | None = None
+        best_score = -1
+        search_limit = 500
+        searched = 0
+        while q and searched < search_limit:
+            p = q.popleft()
+            searched += 1
+            if self.is_area_free(p, blueprint):
+                score = self._count_resource_nearby(p, TileType.ROCK, radius=5)
+                if score > best_score:
+                    best = p
+                    best_score = score
+            for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+                cand = (p[0] + dx, p[1] + dy)
+                if cand in visited:
+                    continue
+                visited.add(cand)
+                q.append(cand)
+        return best
 
     def dispatch_job(self) -> Optional[Job]:
         if self.jobs:
@@ -500,6 +563,24 @@ class Game:
 
         # Process pending villager spawns
         self._process_spawns()
+
+
+        # Prioritise building a Quarry when possible
+        quarry_bp = self.blueprints["Quarry"]
+        if (
+            self.storage["wood"] >= quarry_bp.wood
+            and self.storage["stone"] >= quarry_bp.stone
+            and not any(b.blueprint.name == "Quarry" for b in self.build_queue)
+            and not any(b.blueprint.name == "Quarry" for b in self.buildings)
+        ):
+            pos = self.find_quarry_site(quarry_bp)
+            if pos:
+                self.storage["wood"] -= quarry_bp.wood
+                self.storage["stone"] -= quarry_bp.stone
+                building = Building(quarry_bp, pos)
+                self.build_queue.append(building)
+                self.buildings.append(building)
+                self.jobs.append(Job("build", building))
 
         # Build additional storage when nearing capacity
         storage_bp = self.blueprints["Storage"]
