@@ -180,6 +180,7 @@ class Game:
         self.paused = False
         self.single_step = False
         self.show_help = False
+        self.show_actions = False
         self.show_fps = False
         self.current_fps = 0.0
         self.last_tick_ms = 0.0
@@ -302,6 +303,7 @@ class Game:
         term = self.renderer.term
         if self.renderer.use_curses:
             import curses
+
             ch = term.getch()
             key = ch if ch != -1 else None
         else:
@@ -317,21 +319,26 @@ class Game:
                     self.camera.move(0, -1, self.map.width, self.map.height)
                 elif key == curses.KEY_DOWN:
                     self.camera.move(0, 1, self.map.width, self.map.height)
-                elif key == ord('+'):
+                elif key == ord("+"):
                     self.camera.zoom_in()
                     self.camera.move(0, 0, self.map.width, self.map.height)
-                elif key == ord('-'):
+                elif key == ord("-"):
                     self.camera.zoom_out()
                     self.camera.move(0, 0, self.map.width, self.map.height)
-                elif key == ord(' '):
+                elif ord("1") <= key <= ord("9"):
+                    self.camera.set_zoom_level(key - ord("1"))
+                    self.camera.move(0, 0, self.map.width, self.map.height)
+                elif key == ord(" "):
                     self.paused = not self.paused
-                elif key == ord('.'):
+                elif key == ord("."):
                     self.single_step = True
-                elif key in (ord('h'), ord('H')):
+                elif key in (ord("h"), ord("H")):
                     self.show_help = not self.show_help
-                elif key in (ord('c'), ord('C')):
+                elif key in (ord("a"), ord("A")):
+                    self.show_actions = not self.show_actions
+                elif key in (ord("c"), ord("C")):
                     self.camera.center(self.map.width, self.map.height)
-                elif key in (ord('q'), ord('Q')):
+                elif key in (ord("q"), ord("Q")):
                     self.running = False
             else:
                 if key.code == term.KEY_LEFT:
@@ -348,15 +355,20 @@ class Game:
                 elif key == "-":
                     self.camera.zoom_out()
                     self.camera.move(0, 0, self.map.width, self.map.height)
-                elif key == ' ':
+                elif key in "123456789":
+                    self.camera.set_zoom_level(int(key) - 1)
+                    self.camera.move(0, 0, self.map.width, self.map.height)
+                elif key == " ":
                     self.paused = not self.paused
-                elif key == '.':
+                elif key == ".":
                     self.single_step = True
-                elif key.lower() == 'h':
+                elif key.lower() == "h":
                     self.show_help = not self.show_help
-                elif key.lower() == 'c':
+                elif key.lower() == "a":
+                    self.show_actions = not self.show_actions
+                elif key.lower() == "c":
                     self.camera.center(self.map.width, self.map.height)
-                elif key.lower() == 'q':
+                elif key.lower() == "q":
                     self.running = False
 
         if not self.paused or self.single_step:
@@ -420,8 +432,21 @@ class Game:
         if self.show_help:
             lines = [
                 "Controls:",
-                "arrow keys - move camera", "+/- - zoom", "space - pause",
-                ". - step", "c - centre", "h - toggle help", "q - quit",
+                "arrow keys - move camera",
+                "+/- - zoom",
+                "space - pause",
+                ". - step",
+                "c - centre",
+                "h - toggle help",
+                "q - quit",
+                "1-9 - set zoom",
+                "a - toggle actions",
             ]
             self.renderer.render_help(lines)
 
+        if self.show_actions:
+            start = 0
+            if self.show_help:
+                start = len(lines)
+            lines = [f"Villager {v.id}: {v.state}" for v in self.entities]
+            self.renderer.render_overlay(lines, start_y=start)
