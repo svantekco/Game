@@ -58,3 +58,8 @@ class Camera:
         sx = (wx - self.x) * self.zoom
         sy = (wy - self.y) * self.zoom
         return sx, sy
+
+    def center(self, map_width: int, map_height: int) -> None:
+        """Center the camera on the map."""
+        self.x = max(0, (map_width // 2) - (self.visible_tiles_x // 2))
+        self.y = max(0, (map_height // 2) - (self.visible_tiles_y // 2))
