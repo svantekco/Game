@@ -13,6 +13,7 @@ from .constants import (
     TICK_RATE,
     VILLAGER_ACTION_DELAY,
     MAX_STORAGE,
+    SEARCH_LIMIT,
 )
 from .pathfinding import find_nearest_resource, find_path
 from .building import BuildingBlueprint, Building
@@ -303,8 +304,10 @@ class Game:
 
         q = deque([origin])
         visited = {origin}
-        while q:
+        searched = 0
+        while q and searched < SEARCH_LIMIT:
             x, y = q.popleft()
+            searched += 1
             if self.map.get_tile(x, y).passable:
                 return (x, y)
             for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
@@ -324,8 +327,10 @@ class Game:
 
         q = deque([origin])
         visited = {origin}
-        while q:
+        searched = 0
+        while q and searched < SEARCH_LIMIT:
             x, y = q.popleft()
+            searched += 1
             if self.map.get_tile(x, y).passable:
                 return (x, y)
             for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
@@ -381,8 +386,10 @@ class Game:
         starts = [b.position for b in self.buildings] or [self.storage_pos]
         visited = set(starts)
         q = deque(starts)
-        while q:
+        searched = 0
+        while q and searched < SEARCH_LIMIT:
             p = q.popleft()
+            searched += 1
             for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
                 cand = (p[0] + dx, p[1] + dy)
                 if cand in visited:
@@ -563,7 +570,6 @@ class Game:
 
         # Process pending villager spawns
         self._process_spawns()
-
 
         # Prioritise building a Quarry when possible
         quarry_bp = self.blueprints["Quarry"]
