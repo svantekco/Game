@@ -153,6 +153,9 @@ class Villager:
                         game.build_queue.remove(self.target_building)
                     if self.target_building.blueprint.name == "House":
                         game.schedule_spawn(self.target_building.position)
+                else:
+                    # Requeue the build job until construction is finished
+                    game.jobs.append(Job("build", self.target_building))
                 self.state = "idle"
 
     @property
@@ -681,6 +684,7 @@ class Game:
             self.storage["wood"] >= lumber_bp.wood
             and self.storage["stone"] >= lumber_bp.stone
             and not any(b.blueprint.name == "Lumberyard" for b in self.build_queue)
+            and not any(b.blueprint.name == "Lumberyard" for b in self.buildings)
         ):
             pos = self.find_build_site(lumber_bp)
             if pos:

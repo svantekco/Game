@@ -46,9 +46,11 @@ class GameMap:
         if noise < 0.65:
             decorative = self._hash(x + 1, y + 1) < 0.1
             amt = 0 if decorative else 100
-            return Tile(TileType.TREE, resource_amount=amt, passable=False)
+            # Trees should be traversable so villagers can gather wood
+            return Tile(TileType.TREE, resource_amount=amt, passable=True)
         if noise < 0.8:
-            return Tile(TileType.ROCK, resource_amount=100, passable=False)
+            # Allow walking onto rocks for mining
+            return Tile(TileType.ROCK, resource_amount=100, passable=True)
         return Tile(TileType.WATER, resource_amount=0, passable=False)
 
     def get_tile(self, x: int, y: int) -> Tile:
