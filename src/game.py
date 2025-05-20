@@ -267,6 +267,7 @@ class Game:
 
             curses.cbreak()
             curses.noecho()
+            term.nodelay(True)
             try:
                 last = time.perf_counter()
                 while self.running:
@@ -279,6 +280,7 @@ class Game:
                     sleep = max(0, (1 / self.tick_rate) - (time.perf_counter() - start))
                     time.sleep(sleep)
             finally:
+                term.nodelay(False)
                 curses.nocbreak()
                 curses.echo()
                 curses.endwin()
@@ -298,32 +300,64 @@ class Game:
     def update(self) -> None:
         """Process input and update world state."""
         term = self.renderer.term
-        key = term.inkey(timeout=0)
+        if self.renderer.use_curses:
+            import curses
+            ch = term.getch()
+            key = ch if ch != -1 else None
+        else:
+            key = term.inkey(timeout=0)
+
         if key:
-            if key.code == term.KEY_LEFT:
-                self.camera.move(-1, 0, self.map.width, self.map.height)
-            elif key.code == term.KEY_RIGHT:
-                self.camera.move(1, 0, self.map.width, self.map.height)
-            elif key.code == term.KEY_UP:
-                self.camera.move(0, -1, self.map.width, self.map.height)
-            elif key.code == term.KEY_DOWN:
-                self.camera.move(0, 1, self.map.width, self.map.height)
-            elif key == "+":
-                self.camera.zoom_in()
-                self.camera.move(0, 0, self.map.width, self.map.height)
-            elif key == "-":
-                self.camera.zoom_out()
-                self.camera.move(0, 0, self.map.width, self.map.height)
-            elif key == ' ':
-                self.paused = not self.paused
-            elif key == '.':
-                self.single_step = True
-            elif key.lower() == 'h':
-                self.show_help = not self.show_help
-            elif key.lower() == 'c':
-                self.camera.center(self.map.width, self.map.height)
-            elif key.lower() == 'q':
-                self.running = False
+            if self.renderer.use_curses:
+                if key == curses.KEY_LEFT:
+                    self.camera.move(-1, 0, self.map.width, self.map.height)
+                elif key == curses.KEY_RIGHT:
+                    self.camera.move(1, 0, self.map.width, self.map.height)
+                elif key == curses.KEY_UP:
+                    self.camera.move(0, -1, self.map.width, self.map.height)
+                elif key == curses.KEY_DOWN:
+                    self.camera.move(0, 1, self.map.width, self.map.height)
+                elif key == ord('+'):
+                    self.camera.zoom_in()
+                    self.camera.move(0, 0, self.map.width, self.map.height)
+                elif key == ord('-'):
+                    self.camera.zoom_out()
+                    self.camera.move(0, 0, self.map.width, self.map.height)
+                elif key == ord(' '):
+                    self.paused = not self.paused
+                elif key == ord('.'):
+                    self.single_step = True
+                elif key in (ord('h'), ord('H')):
+                    self.show_help = not self.show_help
+                elif key in (ord('c'), ord('C')):
+                    self.camera.center(self.map.width, self.map.height)
+                elif key in (ord('q'), ord('Q')):
+                    self.running = False
+            else:
+                if key.code == term.KEY_LEFT:
+                    self.camera.move(-1, 0, self.map.width, self.map.height)
+                elif key.code == term.KEY_RIGHT:
+                    self.camera.move(1, 0, self.map.width, self.map.height)
+                elif key.code == term.KEY_UP:
+                    self.camera.move(0, -1, self.map.width, self.map.height)
+                elif key.code == term.KEY_DOWN:
+                    self.camera.move(0, 1, self.map.width, self.map.height)
+                elif key == "+":
+                    self.camera.zoom_in()
+                    self.camera.move(0, 0, self.map.width, self.map.height)
+                elif key == "-":
+                    self.camera.zoom_out()
+                    self.camera.move(0, 0, self.map.width, self.map.height)
+                elif key == ' ':
+                    self.paused = not self.paused
+                elif key == '.':
+                    self.single_step = True
+                elif key.lower() == 'h':
+                    self.show_help = not self.show_help
+                elif key.lower() == 'c':
+                    self.camera.center(self.map.width, self.map.height)
+                elif key.lower() == 'q':
+                    self.running = False
 
         if not self.paused or self.single_step:
             for vill in self.entities:
