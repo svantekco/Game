@@ -20,6 +20,9 @@ DEFAULT_ZOOM_INDEX = 0
 # Game tick rate (ticks per second)
 TICK_RATE = 60
 
+# Amount of resources a villager can carry at once
+CARRY_CAPACITY = 10
+
 
 class Color(Enum):
     """Logical color identifiers used for rendering."""
