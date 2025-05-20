@@ -43,6 +43,13 @@ class Renderer:
             self.term = curses.initscr()
             self.use_curses = True
 
+        # Track previously rendered frame so we can update only changed
+        # positions. Each element mirrors the glyph/color grid passed to
+        # ``draw_grid``.
+        self._last_glyphs: list[list[str]] | None = None
+        self._last_colors: list[list[Color | None]] | None = None
+        self._last_size: tuple[int, int] = (0, 0)
+
     def clear(self) -> None:
         if self.use_curses:
             self.term.clear()
@@ -50,6 +57,9 @@ class Renderer:
         else:
             sys.stdout.write(self.term.clear())
             sys.stdout.flush()
+        # Reset diff tracking since the screen is now blank
+        self._last_glyphs = None
+        self._last_colors = None
 
     def draw_grid(
         self, glyphs: list[list[str]], colors: list[list[Color | None]] | None = None
@@ -57,40 +67,64 @@ class Renderer:
         if colors is None:
             colors = [[None for _ in row] for row in glyphs]
 
+        height = len(glyphs)
+        width = len(glyphs[0]) if height else 0
+
+        size = (width, height)
+        full_redraw = size != self._last_size or self._last_glyphs is None
+        if full_redraw:
+            # If the grid size changed (e.g., zoom level), clear the screen and
+            # redraw everything.
+            self.clear()
+            self._last_size = size
+
         if self.use_curses:
             for y, row in enumerate(glyphs):
                 for x, ch in enumerate(row):
-                    self.term.addstr(y, x, ch)
+                    if (
+                        full_redraw
+                        or self._last_glyphs[y][x] != ch
+                        or self._last_colors[y][x] != colors[y][x]
+                    ):
+                        self.term.addstr(y, x, ch)
             self.term.refresh()
-            return
+        else:
+            out: list[str] = []
+            for y, row in enumerate(glyphs):
+                for x, ch in enumerate(row):
+                    if (
+                        full_redraw
+                        or self._last_glyphs[y][x] != ch
+                        or self._last_colors[y][x] != colors[y][x]
+                    ):
+                        color = colors[y][x]
+                        move = self.term.move_xy(x, y)
+                        if color:
+                            attr = self.COLOR_ATTRS.get(color)
+                            if attr and hasattr(self.term, attr):
+                                out.append(move + getattr(self.term, attr)(ch))
+                            else:
+                                out.append(move + ch)
+                        else:
+                            out.append(move + ch)
+            sys.stdout.write("".join(out))
+            sys.stdout.flush()
 
-        out: list[str] = []
-        for y, row in enumerate(glyphs):
-            for x, ch in enumerate(row):
-                color = colors[y][x]
-                move = self.term.move_xy(x, y)
-                if color:
-                    attr = self.COLOR_ATTRS.get(color)
-                    if attr and hasattr(self.term, attr):
-                        out.append(move + getattr(self.term, attr)(ch))
-                    else:
-                        out.append(move + ch)
-                else:
-                    out.append(move + ch)
-        sys.stdout.write("".join(out))
-        sys.stdout.flush()
+        # Store frame for diffing next draw
+        self._last_glyphs = [row.copy() for row in glyphs]
+        self._last_colors = [row.copy() for row in colors]
 
     # ------------------------------------------------------------------
     def _tile_to_render(self, tile: TileType, detailed: bool) -> tuple[str, Color]:
         """Return a glyph and color for the given tile type."""
         if detailed:
             if tile is TileType.GRASS:
-                return "\xb7", Color.GRASS
+                return ".", Color.GRASS
             if tile is TileType.TREE:
-                return "\U0001f333", Color.TREE  # tree emoji
+                return "t", Color.TREE
             if tile is TileType.ROCK:
-                return "\u26f0", Color.ROCK  # mountain
-            return "\u2248", Color.WATER  # approx waves
+                return "^", Color.ROCK
+            return "~", Color.WATER
         else:
             if tile is TileType.GRASS:
                 return "G", Color.GRASS
@@ -154,7 +188,6 @@ class Renderer:
                 glyph_grid[sy][sx] = "@"
                 color_grid[sy][sx] = Color.UI
 
-        self.clear()
         self.draw_grid(glyph_grid, color_grid)
 
     def render_status(self, text: str) -> None:

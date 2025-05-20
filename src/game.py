@@ -191,6 +191,10 @@ class Game:
         self.current_fps = 0.0
         self.last_tick_ms = 0.0
 
+        # Track overlay state so the renderer can clear when toggled.
+        self._prev_show_help = False
+        self._prev_show_actions = False
+
     # --- Resource Helpers ---------------------------------------------
     def adjust_storage(self, resource: str, amount: int) -> None:
         """Add or remove resources from global storage."""
@@ -422,6 +426,17 @@ class Game:
     def render(self) -> None:
         """Draw the current game state."""
         detailed = self.camera.zoom_index >= 1
+
+        if (
+            self.show_help != self._prev_show_help
+            or self.show_actions != self._prev_show_actions
+        ):
+            # Clear screen when overlay visibility toggles so leftover text
+            # doesn't remain. Reset renderer diff tracking.
+            self.renderer.clear()
+            self.renderer._last_glyphs = None
+            self._prev_show_help = self.show_help
+            self._prev_show_actions = self.show_actions
         self.renderer.render_game(
             self.map, self.camera, self.entities, self.buildings, detailed=detailed
         )
