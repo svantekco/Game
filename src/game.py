@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional
 
-from .constants import CARRY_CAPACITY, TileType, Color
+from .constants import CARRY_CAPACITY, TileType, Color, ZOOM_LEVELS, TICK_RATE
 from .pathfinding import find_nearest_resource, find_path
 from .building import BuildingBlueprint, Building
 
@@ -164,6 +164,8 @@ class Game:
 
         self.renderer = Renderer()
         self.camera = Camera()
+        # Start fully zoomed out and centred on the first villager
+        self.camera.set_zoom_level(len(ZOOM_LEVELS) - 1)
 
         # Starting building - Town Hall at storage location
         townhall = Building(self.blueprints["TownHall"], self.storage_pos, progress=0)
@@ -173,9 +175,13 @@ class Game:
 
         # Create a single villager at the storage location as a demo
         self.entities.append(Villager(id=1, position=self.storage_pos))
+        self.camera.center_on(
+            self.storage_pos[0], self.storage_pos[1], self.map.width, self.map.height
+        )
 
         self.running = False
-        self.tick_rate = 1.0  # ticks per second
+        # Use a higher tick rate so keyboard input is responsive
+        self.tick_rate = TICK_RATE
         self.tick_count = 0
         self.paused = False
         self.single_step = False

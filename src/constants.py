@@ -1,8 +1,10 @@
 from enum import Enum, auto
 
 # Map dimensions
-MAP_WIDTH = 1000
-MAP_HEIGHT = 1000
+# Expand the world to a very large grid.  The map no longer stores all tiles in
+# memory at once, so these values can be huge without exhausting RAM.
+MAP_WIDTH = 100_000
+MAP_HEIGHT = 100_000
 
 
 class TileType(Enum):

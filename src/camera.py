@@ -67,3 +67,12 @@ class Camera:
         """Center the camera on the map."""
         self.x = max(0, (map_width // 2) - (self.visible_tiles_x // 2))
         self.y = max(0, (map_height // 2) - (self.visible_tiles_y // 2))
+
+    def center_on(self, x: int, y: int, map_width: int, map_height: int) -> None:
+        """Center the camera around the given world coordinates."""
+        self.x = x - self.visible_tiles_x // 2
+        self.y = y - self.visible_tiles_y // 2
+        max_x = max(0, map_width - self.visible_tiles_x)
+        max_y = max(0, map_height - self.visible_tiles_y)
+        self.x = min(max(self.x, 0), max_x)
+        self.y = min(max(self.y, 0), max_y)
