@@ -170,7 +170,8 @@ class Game:
         # Starting building - Town Hall at storage location
         townhall = Building(self.blueprints["TownHall"], self.storage_pos, progress=0)
         townhall.progress = townhall.blueprint.cost
-        townhall.passable = False
+        # Keep the Town Hall passable so villagers can deliver resources
+        townhall.passable = True
         self.buildings.append(townhall)
 
         # Create a single villager at the storage location as a demo
