@@ -16,3 +16,24 @@ VIEWPORT_HEIGHT = 24
 # Discrete zoom levels: 1 cell per tile, 2 cells per tile, etc.
 ZOOM_LEVELS = [1, 2, 4]
 DEFAULT_ZOOM_INDEX = 0
+
+# Game tick rate (ticks per second)
+TICK_RATE = 60
+
+
+class Color(Enum):
+    """Logical color identifiers used for rendering."""
+
+    GRASS = auto()
+    TREE = auto()
+    ROCK = auto()
+    WATER = auto()
+    UI = auto()
+
+
+class Style(Enum):
+    """Text style attributes."""
+
+    NORMAL = auto()
+    BOLD = auto()
+    UNDERLINE = auto()
