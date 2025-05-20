@@ -38,3 +38,20 @@ class Building:
     @property
     def complete(self) -> bool:
         return self.progress >= self.blueprint.build_time
+
+    # ------------------------------------------------------------------
+    def glyph_for_progress(self) -> tuple[str, Color]:
+        """Return a glyph and colour based on construction progress."""
+
+        if self.complete or self.blueprint.build_time <= 0:
+            return self.blueprint.glyph, self.blueprint.color
+
+        ratio = self.progress / self.blueprint.build_time
+        if ratio < 1 / 3:
+            glyph = "."
+        elif ratio < 2 / 3:
+            glyph = "+"
+        else:
+            glyph = self.blueprint.glyph.lower()
+
+        return glyph, self.blueprint.color

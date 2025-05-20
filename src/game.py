@@ -58,7 +58,11 @@ class Villager:
             delay *= 3
         # Roads override terrain slowdown
         for b in game.buildings:
-            if b.position == self.position and b.blueprint.name == "Road" and b.complete:
+            if (
+                b.position == self.position
+                and b.blueprint.name == "Road"
+                and b.complete
+            ):
                 delay = max(1, delay // 2)
                 break
         self.cooldown = delay
@@ -216,6 +220,7 @@ class Game:
         self.buildings.append(storage)
 
         from collections import defaultdict
+
         self.tile_usage: Dict[Tuple[int, int], int] = defaultdict(int)
 
         self.renderer = Renderer()
@@ -728,6 +733,15 @@ class Game:
             build_lines = [f"{name}: {cnt}" for name, cnt in counts.items()]
             self.renderer.render_overlay(build_lines, start_y=overlay_start)
             overlay_start += len(build_lines)
+
+            progress_lines = []
+            for b in self.build_queue:
+                if b.blueprint.build_time > 0:
+                    pct = int(100 * b.progress / b.blueprint.build_time)
+                    progress_lines.append(f"{b.blueprint.name} {pct}%")
+            if progress_lines:
+                self.renderer.render_overlay(progress_lines, start_y=overlay_start)
+                overlay_start += len(progress_lines)
 
         if self.show_actions:
             lines = [f"Villager {v.id}: {v.state}" for v in self.entities]

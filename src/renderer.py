@@ -167,13 +167,18 @@ class Renderer:
 
         # Overlay buildings
         for b in buildings:
+            render_fn = getattr(b, "glyph_for_progress", None)
             for bx, by in getattr(
                 b, "cells", lambda: [(b.position[0], b.position[1])]
             )():
                 sx, sy = camera.world_to_screen(bx, by)
                 if 0 <= sy < len(glyph_grid) and 0 <= sx < len(glyph_grid[0]):
-                    glyph_grid[sy][sx] = b.blueprint.glyph
-                    color_grid[sy][sx] = b.blueprint.color
+                    if callable(render_fn):
+                        glyph, color = render_fn()
+                    else:
+                        glyph, color = b.blueprint.glyph, b.blueprint.color
+                    glyph_grid[sy][sx] = glyph
+                    color_grid[sy][sx] = color
 
         # Overlay villager paths first so the villager glyphs appear on top
         for vill in villagers:
