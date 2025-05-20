@@ -39,7 +39,7 @@ $ source .venv/bin/activate            # Windows: .venv\Scripts\activate
 $ pip install -r requirements.txt
 
 # Run the game
-$ python -m src.main                  # Add --seed 42 for reproducible worlds
+$ python -m src.main [--seed 42] [--show-fps] [-v]
 ```
 
 ### Default Controls
@@ -53,6 +53,9 @@ $ python -m src.main                  # Add --seed 42 for reproducible worlds
 | `c`       | Center camera    |
 | `h`       | Toggle help pane |
 | `q`       | Quit             |
+
+The bottom row shows the current tick, camera position/zoom, stored resources
+and population. Use `--show-fps` to display performance metrics.
 
 ---
 

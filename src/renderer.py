@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import sys
+from typing import TYPE_CHECKING
 
-from .constants import Color, TileType
+from .constants import Color, TileType, STATUS_PANEL_Y
+
+if TYPE_CHECKING:  # pragma: no cover - imports for type hints only
+    from .map import GameMap
+    from .camera import Camera
+    from .game import Villager
 
 try:
     from blessed import Terminal
@@ -69,15 +75,24 @@ class Renderer:
         sys.stdout.flush()
 
     # ------------------------------------------------------------------
-    def _tile_to_render(self, tile: TileType) -> tuple[str, Color]:
+    def _tile_to_render(self, tile: TileType, detailed: bool) -> tuple[str, Color]:
         """Return a glyph and color for the given tile type."""
-        if tile is TileType.GRASS:
-            return ".", Color.GRASS
-        if tile is TileType.TREE:
-            return "T", Color.TREE
-        if tile is TileType.ROCK:
-            return "R", Color.ROCK
-        return "~", Color.WATER
+        if detailed:
+            if tile is TileType.GRASS:
+                return "\xb7", Color.GRASS
+            if tile is TileType.TREE:
+                return "\U0001F333", Color.TREE  # tree emoji
+            if tile is TileType.ROCK:
+                return "\u26F0", Color.ROCK  # mountain
+            return "\u2248", Color.WATER  # approx waves
+        else:
+            if tile is TileType.GRASS:
+                return "G", Color.GRASS
+            if tile is TileType.TREE:
+                return "T", Color.TREE
+            if tile is TileType.ROCK:
+                return "R", Color.ROCK
+            return "W", Color.WATER
 
     def render_game(
         self,
@@ -85,6 +100,7 @@ class Renderer:
         camera: "Camera",
         villagers: list["Villager"],
         buildings: list[object] | None = None,
+        detailed: bool = False,
     ) -> None:
         """Render the visible portion of the map with villagers and buildings."""
 
@@ -100,7 +116,7 @@ class Renderer:
                 wx = camera.x + tx
                 wy = camera.y + ty
                 tile = gmap.get_tile(wx, wy)
-                glyph, color = self._tile_to_render(tile.type)
+                glyph, color = self._tile_to_render(tile.type, detailed)
                 glyph_row.extend([glyph] * camera.zoom)
                 color_row.extend([color] * camera.zoom)
         for _ in range(camera.zoom):
@@ -132,3 +148,25 @@ class Renderer:
 
         self.clear()
         self.draw_grid(glyph_grid, color_grid)
+
+    def render_status(self, text: str) -> None:
+        """Render a status line at the bottom of the screen."""
+        line = text.ljust(self.term.width)
+        if self.use_curses:
+            self.term.addstr(STATUS_PANEL_Y, 0, line[: self.term.width])
+            self.term.refresh()
+        else:
+            sys.stdout.write(self.term.move_xy(0, STATUS_PANEL_Y) + line)
+            sys.stdout.flush()
+
+    def render_help(self, lines: list[str]) -> None:
+        """Overlay help text starting at the top-left."""
+        for idx, line in enumerate(lines):
+            if self.use_curses:
+                self.term.addstr(idx, 0, line)
+            else:
+                sys.stdout.write(self.term.move_xy(0, idx) + line)
+        if self.use_curses:
+            self.term.refresh()
+        else:
+            sys.stdout.flush()

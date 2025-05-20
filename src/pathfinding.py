@@ -5,7 +5,6 @@ import heapq
 from typing import Dict, List, Optional, Tuple, Iterable, Set
 
 from .map import GameMap
-from .tile import Tile
 from .constants import TileType
 
 

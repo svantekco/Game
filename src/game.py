@@ -162,6 +162,13 @@ class Game:
 
         self.running = False
         self.tick_rate = 1.0  # ticks per second
+        self.tick_count = 0
+        self.paused = False
+        self.single_step = False
+        self.show_help = False
+        self.show_fps = False
+        self.current_fps = 0.0
+        self.last_tick_ms = 0.0
 
     # --- Resource Helpers ---------------------------------------------
     def adjust_storage(self, resource: str, amount: int) -> None:
@@ -222,9 +229,10 @@ class Game:
         return None
 
     # --- Game Loop -----------------------------------------------------
-    def run(self) -> None:
+    def run(self, show_fps: bool = False) -> None:
         """Run the main loop until quit."""
         self.running = True
+        self.show_fps = show_fps
         term = self.renderer.term
         if self.renderer.use_curses:
             import curses
@@ -232,20 +240,32 @@ class Game:
             curses.cbreak()
             curses.noecho()
             try:
+                last = time.perf_counter()
                 while self.running:
+                    start = time.perf_counter()
                     self.update()
                     self.render()
-                    time.sleep(1 / self.tick_rate)
+                    self.last_tick_ms = (time.perf_counter() - start) * 1000
+                    self.current_fps = 1 / max(1e-6, time.perf_counter() - last)
+                    last = time.perf_counter()
+                    sleep = max(0, (1 / self.tick_rate) - (time.perf_counter() - start))
+                    time.sleep(sleep)
             finally:
                 curses.nocbreak()
                 curses.echo()
                 curses.endwin()
         else:
             with term.cbreak(), term.hidden_cursor():
+                last = time.perf_counter()
                 while self.running:
+                    start = time.perf_counter()
                     self.update()
                     self.render()
-                    time.sleep(1 / self.tick_rate)
+                    self.last_tick_ms = (time.perf_counter() - start) * 1000
+                    self.current_fps = 1 / max(1e-6, time.perf_counter() - last)
+                    last = time.perf_counter()
+                    sleep = max(0, (1 / self.tick_rate) - (time.perf_counter() - start))
+                    time.sleep(sleep)
 
     def update(self) -> None:
         """Process input and update world state."""
@@ -266,13 +286,44 @@ class Game:
             elif key == '-':
                 self.camera.zoom_out()
                 self.camera.move(0, 0, self.map.width, self.map.height)
+            elif key == ' ':
+                self.paused = not self.paused
+            elif key == '.':
+                self.single_step = True
+            elif key.lower() == 'h':
+                self.show_help = not self.show_help
+            elif key.lower() == 'c':
+                self.camera.center(self.map.width, self.map.height)
             elif key.lower() == 'q':
                 self.running = False
 
-        # Update entities
-        for vill in self.entities:
-            vill.update(self)
+        if not self.paused or self.single_step:
+            for vill in self.entities:
+                vill.update(self)
+            self.tick_count += 1
+            self.single_step = False
 
     def render(self) -> None:
         """Draw the current game state."""
-        self.renderer.render_game(self.map, self.camera, self.entities, self.buildings)
+        detailed = self.camera.zoom_index >= 1
+        self.renderer.render_game(
+            self.map, self.camera, self.entities, self.buildings, detailed=detailed
+        )
+        status = (
+            f"Tick:{self.tick_count} "
+            f"Cam:{self.camera.x},{self.camera.y} "
+            f"Zoom:{self.camera.zoom} "
+            f"Wood:{self.storage['wood']} "
+            f"Pop:{len(self.entities)}"
+        )
+        if self.show_fps:
+            status += f" FPS:{self.current_fps:.1f} ({self.last_tick_ms:.1f}ms)"
+        self.renderer.render_status(status)
+        if self.show_help:
+            lines = [
+                "Controls:",
+                "arrow keys - move camera", "+/- - zoom", "space - pause",
+                ". - step", "c - centre", "h - toggle help", "q - quit",
+            ]
+            self.renderer.render_help(lines)
+
