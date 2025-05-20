@@ -78,6 +78,40 @@ class Villager:
         self.cooldown = delay
         return True
 
+    def thought(self, game: "Game") -> str:
+        """Return a short description of the villager's current intention."""
+        if self.cooldown > 0:
+            return "Waiting..."
+        if self.state == "idle":
+            return "Idle"
+        if self.state == "gather":
+            if self.target_resource:
+                if self.position == self.target_resource:
+                    return f"Gathering {self.resource_type.name.lower()}"
+                if self.target_path:
+                    return (
+                        f"Heading to {self.resource_type.name.lower()} at {self.target_resource}"
+                    )
+                return "Stuck: no path to resource"
+            return "Searching for resource"
+        if self.state == "deliver":
+            if self.position in game.storage_positions:
+                return "Delivering"
+            if self.target_path:
+                return f"Returning to storage at {self.target_storage}"
+            return "Stuck: no path to storage"
+        if self.state == "build":
+            if self.target_building:
+                if self.position == self.target_building.position:
+                    return f"Building {self.target_building.blueprint.name}"
+                if self.target_path:
+                    return (
+                        f"Heading to build {self.target_building.blueprint.name}"
+                    )
+                return "Stuck: no path to site"
+            return "Searching for build"
+        return self.state
+
     def update(self, game: "Game") -> None:
         """Finite state machine handling villager behaviour."""
         if self.cooldown > 0:
@@ -770,7 +804,7 @@ class Game:
                 "b - toggle buildings",
                 "q - quit",
                 "1-9 - set zoom",
-                "A - toggle actions",
+                "A - toggle thoughts",
             ]
             self.renderer.render_help(lines, start_y=overlay_start)
             overlay_start += len(lines)
@@ -793,5 +827,5 @@ class Game:
                 overlay_start += len(progress_lines)
 
         if self.show_actions:
-            lines = [f"Villager {v.id}: {v.state}" for v in self.entities]
+            lines = [f"Villager {v.id}: {v.thought(self)}" for v in self.entities]
             self.renderer.render_overlay(lines, start_y=overlay_start)
