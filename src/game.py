@@ -78,7 +78,11 @@ class Villager:
                     job.payload if isinstance(job.payload, TileType) else TileType.TREE
                 )
                 pos, path = find_nearest_resource(
-                    self.position, resource_type, game.map, game.buildings
+                    self.position,
+                    resource_type,
+                    game.map,
+                    game.buildings,
+                    search_limit=game.get_search_limit(),
                 )
                 if pos is None:
                     return
@@ -371,6 +375,15 @@ class Game:
                 if tile.type is resource and tile.resource_amount > 0:
                     count += 1
         return count
+
+    def get_search_limit(self) -> int:
+        """Return BFS search limit factoring in built Watchtowers."""
+        bonus = sum(
+            1
+            for b in self.buildings
+            if b.blueprint.name == "Watchtower" and b.complete
+        )
+        return SEARCH_LIMIT + bonus * 5000
 
     # --- Building Helpers --------------------------------------------
     def is_area_free(
