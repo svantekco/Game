@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
+
+from .constants import CARRY_CAPACITY, TileType
+from .pathfinding import find_nearest_resource, find_path
 
 from .map import GameMap
 from .renderer import Renderer
@@ -17,8 +20,53 @@ class Villager:
     id: int
     position: Tuple[int, int]
     state: str = "idle"
-    inventory: Dict[str, int] = field(default_factory=dict)
+    inventory: Dict[str, int] = field(default_factory=lambda: {"wood": 0, "stone": 0})
+    carrying_capacity: int = CARRY_CAPACITY
     target_path: List[Tuple[int, int]] = field(default_factory=list)
+    target_resource: Optional[Tuple[int, int]] = None
+    resource_type: Optional[TileType] = None
+
+    # ---------------------------------------------------------------
+    def is_full(self) -> bool:
+        return sum(self.inventory.values()) >= self.carrying_capacity
+
+    def update(self, game: "Game") -> None:
+        """Finite state machine handling villager behaviour."""
+        if self.state == "idle":
+            # Find nearest tree for now
+            pos, path = find_nearest_resource(self.position, TileType.TREE, game.map, game.buildings)
+            if pos is None:
+                return
+            self.resource_type = TileType.TREE
+            self.target_resource = pos
+            self.target_path = path[1:]
+            self.state = "gather"
+            return
+
+        if self.state == "gather":
+            if self.target_path:
+                self.position = self.target_path.pop(0)
+                return
+            if self.target_resource and self.position == self.target_resource:
+                tile = game.map.get_tile(*self.position)
+                gained = tile.extract(1)
+                self.inventory["wood"] += gained
+                if self.is_full() or tile.resource_amount == 0:
+                    self.state = "deliver"
+                    self.target_path = []
+            return
+
+        if self.state == "deliver":
+            if not self.target_path:
+                path = find_path(self.position, game.storage_pos, game.map, game.buildings)
+                self.target_path = path[1:]
+            if self.target_path:
+                self.position = self.target_path.pop(0)
+                return
+            if self.position == game.storage_pos:
+                game.adjust_storage("wood", self.inventory.get("wood", 0))
+                self.inventory["wood"] = 0
+                self.state = "idle"
 
     @property
     def x(self) -> int:
@@ -36,17 +84,26 @@ class Game:
         self.map = GameMap(seed=seed)
         self.entities: List[Villager] = []
         self.buildings: List[object] = []
-        self.storage: Dict[str, int] = {}
+        # Global resource storage
+        self.storage: Dict[str, int] = {"wood": 0, "stone": 0}
+        # Storage location (centre of the map for now)
+        self.storage_pos: Tuple[int, int] = (self.map.width // 2, self.map.height // 2)
 
         self.renderer = Renderer()
         self.camera = Camera()
 
-        # Create a single villager in the center of the map as a demo
-        center = (self.map.width // 2, self.map.height // 2)
-        self.entities.append(Villager(id=1, position=center))
+        # Create a single villager at the storage location as a demo
+        self.entities.append(Villager(id=1, position=self.storage_pos))
 
         self.running = False
         self.tick_rate = 1.0  # ticks per second
+
+    # --- Resource Helpers ---------------------------------------------
+    def adjust_storage(self, resource: str, amount: int) -> None:
+        """Add or remove resources from global storage."""
+        self.storage[resource] = self.storage.get(resource, 0) + amount
+        if self.storage[resource] < 0:
+            self.storage[resource] = 0
 
     # --- Game Loop -----------------------------------------------------
     def run(self) -> None:
@@ -95,6 +152,10 @@ class Game:
                 self.camera.move(0, 0, self.map.width, self.map.height)
             elif key.lower() == 'q':
                 self.running = False
+
+        # Update entities
+        for vill in self.entities:
+            vill.update(self)
 
     def render(self) -> None:
         """Draw the current game state."""
