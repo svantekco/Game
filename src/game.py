@@ -191,62 +191,11 @@ class Game:
         self.pending_spawns: List[Tuple[int, Tuple[int, int]]] = []
 
         # Predefined blueprints
-        self.blueprints: Dict[str, BuildingBlueprint] = {
-            "TownHall": BuildingBlueprint(
-                name="TownHall",
-                build_time=0,
-                footprint=[(0, 0)],
-                glyph="H",
-                color=Color.BUILDING,
-                wood=0,
-                stone=0,
-            ),
-            "Lumberyard": BuildingBlueprint(
-                name="Lumberyard",
-                build_time=10,
-                footprint=[(0, 0)],
-                glyph="L",
-                color=Color.BUILDING,
-                wood=10,
-                stone=0,
-            ),
-            "Quarry": BuildingBlueprint(
-                name="Quarry",
-                build_time=12,
-                footprint=[(0, 0)],
-                glyph="Q",
-                color=Color.BUILDING,
-                wood=10,
-                stone=10,
-            ),
-            "House": BuildingBlueprint(
-                name="House",
-                build_time=15,
-                footprint=[(0, 0)],
-                glyph="h",
-                color=Color.BUILDING,
-                wood=15,
-                stone=0,
-            ),
-            "Storage": BuildingBlueprint(
-                name="Storage",
-                build_time=0,
-                footprint=[(0, 0)],
-                glyph="S",
-                color=Color.BUILDING,
-                wood=20,
-                stone=20,
-            ),
-            "Road": BuildingBlueprint(
-                name="Road",
-                build_time=1,
-                footprint=[(0, 0)],
-                glyph="=",
-                color=Color.PATH,
-                wood=0,
-                stone=5,
-            ),
-        }
+        # Blueprints are now loaded dynamically from ``src.blueprints`` so that
+        # adding a new building only requires creating a new module.
+        from .blueprints import BLUEPRINTS
+
+        self.blueprints: Dict[str, BuildingBlueprint] = dict(BLUEPRINTS)
         # Global resource storage
         self.storage: Dict[str, int] = {"wood": 0, "stone": 0}
         self.storage_capacity = MAX_STORAGE
