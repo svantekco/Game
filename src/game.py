@@ -771,6 +771,15 @@ class Game:
             self.renderer.render_overlay(build_lines, start_y=overlay_start)
             overlay_start += len(build_lines)
 
+            progress_lines = []
+            for b in self.build_queue:
+                if b.blueprint.build_time > 0:
+                    pct = int(100 * b.progress / b.blueprint.build_time)
+                    progress_lines.append(f"{b.blueprint.name} {pct}%")
+            if progress_lines:
+                self.renderer.render_overlay(progress_lines, start_y=overlay_start)
+                overlay_start += len(progress_lines)
+
         if self.show_actions:
             lines = [f"Villager {v.id}: {v.state}" for v in self.entities]
             start_y = max(0, STATUS_PANEL_Y - len(lines))
