@@ -486,7 +486,7 @@ class Game:
                     continue
                 visited.add(cand)
                 q.append(cand)
-        return best
+        return best if best_score > 0 else None
 
     def dispatch_job(self) -> Optional[Job]:
         if self.jobs:

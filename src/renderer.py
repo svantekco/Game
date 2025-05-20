@@ -177,6 +177,42 @@ class Renderer:
                         glyph, color = render_fn()
                     else:
                         glyph, color = b.blueprint.glyph, b.blueprint.color
+
+                    if (
+                        b.blueprint.name == "Road"
+                        and getattr(b, "complete", False)
+                    ):
+                        n = any(
+                            nb.position == (bx, by - 1)
+                            and nb.blueprint.name == "Road"
+                            and nb.complete
+                            for nb in buildings
+                        )
+                        s = any(
+                            nb.position == (bx, by + 1)
+                            and nb.blueprint.name == "Road"
+                            and nb.complete
+                            for nb in buildings
+                        )
+                        w = any(
+                            nb.position == (bx - 1, by)
+                            and nb.blueprint.name == "Road"
+                            and nb.complete
+                            for nb in buildings
+                        )
+                        e = any(
+                            nb.position == (bx + 1, by)
+                            and nb.blueprint.name == "Road"
+                            and nb.complete
+                            for nb in buildings
+                        )
+                        if (n or s) and not (w or e):
+                            glyph = "|"
+                        elif (w or e) and not (n or s):
+                            glyph = "-"
+                        else:
+                            glyph = "+"
+
                     glyph_grid[sy][sx] = glyph
                     color_grid[sy][sx] = color
 

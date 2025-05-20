@@ -138,18 +138,21 @@ def find_nearest_resource(
     if buildings is None:
         buildings = []
 
-    from collections import deque
-
-    frontier = deque([start])
+    open_heap: List[_PQNode] = []
+    heapq.heappush(open_heap, _PQNode(0.0, 0, start))
     came_from: Dict[Tuple[int, int], Tuple[int, int]] = {}
-    visited: Set[Tuple[int, int]] = {start}
+    g_score: Dict[Tuple[int, int], float] = {start: 0.0}
     explored = 0
+    counter = 1
 
-    while frontier:
-        current = frontier.popleft()
+    while open_heap:
+        node = heapq.heappop(open_heap)
+        current = node.position
+
         explored += 1
         if explored > search_limit:
             break
+
         tile = gmap.get_tile(*current)
         if tile.type is resource_type and tile.resource_amount > 0:
             path: List[Tuple[int, int]] = [current]
@@ -160,22 +163,13 @@ def find_nearest_resource(
             return current, path
 
         for n in _neighbors(current, gmap):
-            if n in visited:
-                continue
-            n_tile = gmap.get_tile(*n)
-            if n_tile.type is resource_type and n_tile.resource_amount > 0:
-                came_from[n] = current
-                current = n
-                path: List[Tuple[int, int]] = [current]
-                while current in came_from:
-                    current = came_from[current]
-                    path.append(current)
-                path.reverse()
-                return n, path
             if not _is_passable(n, gmap, buildings):
                 continue
-            visited.add(n)
-            frontier.append(n)
-            came_from[n] = current
+            tentative_g = g_score[current] + _step_cost(n, gmap, buildings)
+            if tentative_g < g_score.get(n, float("inf")):
+                g_score[n] = tentative_g
+                came_from[n] = current
+                heapq.heappush(open_heap, _PQNode(tentative_g, counter, n))
+                counter += 1
 
     return None, []
