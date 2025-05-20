@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import time
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional
 
@@ -42,6 +43,26 @@ class Villager:
     def is_full(self) -> bool:
         return sum(self.inventory.values()) >= self.carrying_capacity
 
+    def _move_step(self, game: "Game") -> bool:
+        """Move one step along the current path and apply terrain slowdown."""
+        if not self.target_path:
+            return False
+        self.position = self.target_path.pop(0)
+        game.record_tile_usage(self.position)
+        tile = game.map.get_tile(*self.position)
+        delay = VILLAGER_ACTION_DELAY
+        if tile.type is TileType.TREE:
+            delay *= 2
+        elif tile.type is TileType.ROCK:
+            delay *= 3
+        # Roads override terrain slowdown
+        for b in game.buildings:
+            if b.position == self.position and b.blueprint.name == "Road" and b.complete:
+                delay = max(1, delay // 2)
+                break
+        self.cooldown = delay
+        return True
+
     def update(self, game: "Game") -> None:
         """Finite state machine handling villager behaviour."""
         if self.cooldown > 0:
@@ -78,9 +99,7 @@ class Villager:
                 return
 
         if self.state == "gather":
-            if self.target_path:
-                self.position = self.target_path.pop(0)
-                self.cooldown = VILLAGER_ACTION_DELAY
+            if self._move_step(game):
                 return
             if self.target_resource and self.position == self.target_resource:
                 tile = game.map.get_tile(*self.position)
@@ -111,9 +130,7 @@ class Villager:
                     self.position, game.storage_pos, game.map, game.buildings
                 )
                 self.target_path = path[1:]
-            if self.target_path:
-                self.position = self.target_path.pop(0)
-                self.cooldown = VILLAGER_ACTION_DELAY
+            if self._move_step(game):
                 return
             if self.position == game.storage_pos:
                 for res in ("wood", "stone"):
@@ -124,9 +141,7 @@ class Villager:
                 self.state = "idle"
 
         if self.state == "build":
-            if self.target_path:
-                self.position = self.target_path.pop(0)
-                self.cooldown = VILLAGER_ACTION_DELAY
+            if self._move_step(game):
                 return
             if self.target_building and self.position == self.target_building.position:
                 self.target_building.progress += 1
@@ -218,6 +233,15 @@ class Game:
                 wood=20,
                 stone=20,
             ),
+            "Road": BuildingBlueprint(
+                name="Road",
+                build_time=1,
+                footprint=[(0, 0)],
+                glyph="=",
+                color=Color.PATH,
+                wood=0,
+                stone=5,
+            ),
         }
         # Global resource storage
         self.storage: Dict[str, int] = {"wood": 0, "stone": 0}
@@ -237,6 +261,9 @@ class Game:
         storage.progress = storage.blueprint.build_time
         storage.passable = True
         self.buildings.append(storage)
+
+        from collections import defaultdict
+        self.tile_usage: Dict[Tuple[int, int], int] = defaultdict(int)
 
         self.renderer = Renderer()
         self.camera = Camera()
@@ -296,6 +323,37 @@ class Game:
         villager = Villager(id=self.next_entity_id, position=position)
         self.next_entity_id += 1
         self.entities.append(villager)
+
+    # --- Usage Tracking ---------------------------------------------
+    def record_tile_usage(self, pos: Tuple[int, int]) -> None:
+        """Increment usage counter for ``pos``."""
+        self.tile_usage[pos] += 1
+
+    def _plan_roads(self) -> None:
+        """Build roads on frequently used tiles every minute."""
+        if self.tick_count % (self.tick_rate * 60) != 0:
+            return
+        road_bp = self.blueprints["Road"]
+        if self.storage["stone"] < road_bp.stone:
+            return
+        # Select top 5 most used tiles
+        candidates = sorted(
+            self.tile_usage.items(), key=lambda kv: kv[1], reverse=True
+        )[:5]
+        for (x, y), _ in candidates:
+            if self.storage["stone"] < road_bp.stone:
+                break
+            tile = self.map.get_tile(x, y)
+            if not tile.passable:
+                continue
+            if any(b.position == (x, y) for b in self.buildings):
+                continue
+            building = Building(road_bp, (x, y))
+            self.storage["stone"] -= road_bp.stone
+            self.build_queue.append(building)
+            self.buildings.append(building)
+            self.jobs.append(Job("build", building))
+        self.tile_usage.clear()
 
     def _find_start_pos(self) -> Tuple[int, int]:
         """Find the nearest passable tile to start the village on."""
@@ -502,13 +560,13 @@ class Game:
 
         if key:
             if self.renderer.use_curses:
-                if key == curses.KEY_LEFT:
+                if key == ord("a"):
                     self.camera.move(-1, 0, self.map.width, self.map.height)
-                elif key == curses.KEY_RIGHT:
+                elif key == ord("d"):
                     self.camera.move(1, 0, self.map.width, self.map.height)
-                elif key == curses.KEY_UP:
+                elif key == ord("w"):
                     self.camera.move(0, -1, self.map.width, self.map.height)
-                elif key == curses.KEY_DOWN:
+                elif key == ord("s"):
                     self.camera.move(0, 1, self.map.width, self.map.height)
                 elif key == ord("+"):
                     self.camera.zoom_in()
@@ -525,20 +583,20 @@ class Game:
                     self.single_step = True
                 elif key in (ord("h"), ord("H")):
                     self.show_help = not self.show_help
-                elif key in (ord("a"), ord("A")):
+                elif key == ord("A"):
                     self.show_actions = not self.show_actions
                 elif key in (ord("c"), ord("C")):
                     self.camera.center(self.map.width, self.map.height)
                 elif key in (ord("q"), ord("Q")):
                     self.running = False
             else:
-                if key.code == term.KEY_LEFT:
+                if key == "a":
                     self.camera.move(-1, 0, self.map.width, self.map.height)
-                elif key.code == term.KEY_RIGHT:
+                elif key == "d":
                     self.camera.move(1, 0, self.map.width, self.map.height)
-                elif key.code == term.KEY_UP:
+                elif key == "w":
                     self.camera.move(0, -1, self.map.width, self.map.height)
-                elif key.code == term.KEY_DOWN:
+                elif key == "s":
                     self.camera.move(0, 1, self.map.width, self.map.height)
                 elif key == "+":
                     self.camera.zoom_in()
@@ -555,7 +613,7 @@ class Game:
                     self.single_step = True
                 elif key.lower() == "h":
                     self.show_help = not self.show_help
-                elif key.lower() == "a":
+                elif key == "A":
                     self.show_actions = not self.show_actions
                 elif key.lower() == "c":
                     self.camera.center(self.map.width, self.map.height)
@@ -570,6 +628,7 @@ class Game:
 
         # Process pending villager spawns
         self._process_spawns()
+        self._plan_roads()
 
         # Prioritise building a Quarry when possible
         quarry_bp = self.blueprints["Quarry"]
@@ -674,7 +733,7 @@ class Game:
         if self.show_help:
             lines = [
                 "Controls:",
-                "arrow keys - move camera",
+                "WASD - move camera",
                 "+/- - zoom",
                 "space - pause",
                 ". - step",
@@ -682,7 +741,7 @@ class Game:
                 "h - toggle help",
                 "q - quit",
                 "1-9 - set zoom",
-                "a - toggle actions",
+                "A - toggle actions",
             ]
             self.renderer.render_help(lines)
 
