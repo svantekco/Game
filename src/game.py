@@ -197,7 +197,7 @@ class Game:
 
         self.blueprints: Dict[str, BuildingBlueprint] = dict(BLUEPRINTS)
         # Global resource storage
-        self.storage: Dict[str, int] = {"wood": 0, "stone": 0}
+        self.storage: Dict[str, int] = {"wood": 0, "stone": 0, "food": 0}
         self.storage_capacity = MAX_STORAGE
 
         # Place Town Hall at the starting location
@@ -309,6 +309,14 @@ class Game:
             self.buildings.append(building)
             self.jobs.append(Job("build", building))
         self.tile_usage.clear()
+
+    def _produce_food(self) -> None:
+        """Generate food from completed farms periodically."""
+        if self.tick_count % (self.tick_rate * 5) != 0:
+            return
+        farms = [b for b in self.buildings if b.blueprint.name == "Farm" and b.complete]
+        for _ in farms:
+            self.adjust_storage("food", 1)
 
     def _find_start_pos(self) -> Tuple[int, int]:
         """Find the nearest passable tile to start the village on."""
@@ -589,6 +597,7 @@ class Game:
         # Process pending villager spawns
         self._process_spawns()
         self._plan_roads()
+        self._produce_food()
 
         # Prioritise building a Quarry when possible
         quarry_bp = self.blueprints["Quarry"]
@@ -687,6 +696,7 @@ class Game:
             f"Zoom:{self.camera.zoom} "
             f"Wood:{self.storage['wood']} "
             f"Stone:{self.storage['stone']} "
+            f"Food:{self.storage['food']} "
             f"Cap:{self.storage_capacity} "
             f"Pop:{len(self.entities)}"
         )
