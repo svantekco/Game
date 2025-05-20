@@ -15,6 +15,7 @@ from .constants import (
     VILLAGER_ACTION_DELAY,
     MAX_STORAGE,
     SEARCH_LIMIT,
+    STATUS_PANEL_Y,
 )
 from .pathfinding import find_nearest_resource, find_path
 from .building import BuildingBlueprint, Building
@@ -284,6 +285,7 @@ class Game:
         self.single_step = False
         self.show_help = False
         self.show_actions = False
+        self.show_buildings = False
         self.show_fps = False
         self.current_fps = 0.0
         self.last_tick_ms = 0.0
@@ -291,6 +293,7 @@ class Game:
         # Track overlay state so the renderer can clear when toggled.
         self._prev_show_help = False
         self._prev_show_actions = False
+        self._prev_show_buildings = False
 
     # --- Resource Helpers ---------------------------------------------
     def adjust_storage(self, resource: str, amount: int) -> None:
@@ -504,7 +507,8 @@ class Game:
         if self.storage["stone"] < self.stone_threshold:
             return Job("gather", TileType.ROCK)
 
-        return None
+        # Default to gathering wood so villagers never stay idle
+        return Job("gather", TileType.TREE)
 
     # --- Game Loop -----------------------------------------------------
     def run(self, show_fps: bool = False) -> None:
@@ -585,6 +589,8 @@ class Game:
                     self.show_help = not self.show_help
                 elif key == ord("A"):
                     self.show_actions = not self.show_actions
+                elif key in (ord("B"), ord("b")):
+                    self.show_buildings = not self.show_buildings
                 elif key in (ord("c"), ord("C")):
                     self.camera.center(self.map.width, self.map.height)
                 elif key in (ord("q"), ord("Q")):
@@ -615,6 +621,8 @@ class Game:
                     self.show_help = not self.show_help
                 elif key == "A":
                     self.show_actions = not self.show_actions
+                elif key.lower() == "b":
+                    self.show_buildings = not self.show_buildings
                 elif key.lower() == "c":
                     self.camera.center(self.map.width, self.map.height)
                 elif key.lower() == "q":
@@ -708,6 +716,7 @@ class Game:
         if (
             self.show_help != self._prev_show_help
             or self.show_actions != self._prev_show_actions
+            or self.show_buildings != self._prev_show_buildings
         ):
             # Clear screen when overlay visibility toggles so leftover text
             # doesn't remain. Reset renderer diff tracking.
@@ -715,6 +724,7 @@ class Game:
             self.renderer._last_glyphs = None
             self._prev_show_help = self.show_help
             self._prev_show_actions = self.show_actions
+            self._prev_show_buildings = self.show_buildings
         self.renderer.render_game(
             self.map, self.camera, self.entities, self.buildings, detailed=detailed
         )
@@ -730,6 +740,7 @@ class Game:
         if self.show_fps:
             status += f" FPS:{self.current_fps:.1f} ({self.last_tick_ms:.1f}ms)"
         self.renderer.render_status(status)
+        overlay_start = 0
         if self.show_help:
             lines = [
                 "Controls:",
@@ -739,15 +750,23 @@ class Game:
                 ". - step",
                 "c - centre",
                 "h - toggle help",
+                "b - toggle buildings",
                 "q - quit",
                 "1-9 - set zoom",
                 "A - toggle actions",
             ]
             self.renderer.render_help(lines)
+            overlay_start = len(lines)
+
+        if self.show_buildings:
+            counts: Dict[str, int] = defaultdict(int)
+            for b in self.buildings:
+                counts[b.blueprint.name] += 1
+            build_lines = [f"{name}: {cnt}" for name, cnt in counts.items()]
+            self.renderer.render_overlay(build_lines, start_y=overlay_start)
+            overlay_start += len(build_lines)
 
         if self.show_actions:
-            start = 0
-            if self.show_help:
-                start = len(lines)
             lines = [f"Villager {v.id}: {v.state}" for v in self.entities]
-            self.renderer.render_overlay(lines, start_y=start)
+            start_y = max(0, STATUS_PANEL_Y - len(lines))
+            self.renderer.render_overlay(lines, start_y=start_y)
