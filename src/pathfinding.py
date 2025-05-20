@@ -135,6 +135,16 @@ def find_nearest_resource(
         for n in _neighbors(current, gmap):
             if n in visited:
                 continue
+            n_tile = gmap.get_tile(*n)
+            if n_tile.type is resource_type and n_tile.resource_amount > 0:
+                came_from[n] = current
+                current = n
+                path: List[Tuple[int, int]] = [current]
+                while current in came_from:
+                    current = came_from[current]
+                    path.append(current)
+                path.reverse()
+                return n, path
             if not _is_passable(n, gmap, buildings):
                 continue
             visited.add(n)

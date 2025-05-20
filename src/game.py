@@ -159,8 +159,8 @@ class Game:
         }
         # Global resource storage
         self.storage: Dict[str, int] = {"wood": 0, "stone": 0}
-        # Storage location (centre of the map for now)
-        self.storage_pos: Tuple[int, int] = (self.map.width // 2, self.map.height // 2)
+        # Storage location (centre of the map, adjusted to a passable tile)
+        self.storage_pos: Tuple[int, int] = self._find_start_pos()
 
         self.renderer = Renderer()
         self.camera = Camera()
@@ -219,6 +219,28 @@ class Game:
         villager = Villager(id=self.next_entity_id, position=position)
         self.next_entity_id += 1
         self.entities.append(villager)
+
+    def _find_start_pos(self) -> Tuple[int, int]:
+        """Find the nearest passable tile to start the village on."""
+        origin = (self.map.width // 2, self.map.height // 2)
+        from collections import deque
+
+        q = deque([origin])
+        visited = {origin}
+        while q:
+            x, y = q.popleft()
+            if self.map.get_tile(x, y).passable:
+                return (x, y)
+            for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+                nx, ny = x + dx, y + dy
+                if (
+                    0 <= nx < self.map.width
+                    and 0 <= ny < self.map.height
+                    and (nx, ny) not in visited
+                ):
+                    visited.add((nx, ny))
+                    q.append((nx, ny))
+        return origin
 
     # --- Building Helpers --------------------------------------------
     def is_area_free(
