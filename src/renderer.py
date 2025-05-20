@@ -177,7 +177,8 @@ class Renderer:
 
         # Overlay villager paths first so the villager glyphs appear on top
         for vill in villagers:
-            for px, py in getattr(vill, "target_path", []):
+            path = getattr(vill, "target_path", [])
+            for px, py in path[:-1]:
                 sx, sy = camera.world_to_screen(px, py)
                 if 0 <= sy < len(glyph_grid) and 0 <= sx < len(glyph_grid[0]):
                     glyph_grid[sy][sx] = "\xb7"  # middle dot character
