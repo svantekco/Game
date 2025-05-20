@@ -100,6 +100,14 @@ class Renderer:
                 glyph_grid.append(glyph_row.copy())
                 color_grid.append(color_row.copy())
 
+        # Overlay villager paths first so the villager glyphs appear on top
+        for vill in villagers:
+            for px, py in getattr(vill, "target_path", []):
+                sx, sy = camera.world_to_screen(px, py)
+                if 0 <= sy < len(glyph_grid) and 0 <= sx < len(glyph_grid[0]):
+                    glyph_grid[sy][sx] = "\xb7"  # middle dot character
+                    color_grid[sy][sx] = Color.UI
+
         # Overlay villagers
         for vill in villagers:
             sx, sy = camera.world_to_screen(vill.x, vill.y)
