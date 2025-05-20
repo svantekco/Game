@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 
-from .constants import Color
+from .constants import Color, TileType
 
 try:
     from blessed import Terminal
@@ -67,3 +67,45 @@ class Renderer:
                     out.append(move + ch)
         sys.stdout.write("".join(out))
         sys.stdout.flush()
+
+    # ------------------------------------------------------------------
+    def _tile_to_render(self, tile: TileType) -> tuple[str, Color]:
+        """Return a glyph and color for the given tile type."""
+        if tile is TileType.GRASS:
+            return ".", Color.GRASS
+        if tile is TileType.TREE:
+            return "T", Color.TREE
+        if tile is TileType.ROCK:
+            return "R", Color.ROCK
+        return "~", Color.WATER
+
+    def render_game(
+        self, gmap: "GameMap", camera: "Camera", villagers: list["Villager"]
+    ) -> None:
+        """Render the visible portion of the map with villagers overlaid."""
+        glyph_grid: list[list[str]] = []
+        color_grid: list[list[Color]] = []
+
+        for ty in range(camera.visible_tiles_y):
+            glyph_row: list[str] = []
+            color_row: list[Color] = []
+            for tx in range(camera.visible_tiles_x):
+                wx = camera.x + tx
+                wy = camera.y + ty
+                tile = gmap.get_tile(wx, wy)
+                glyph, color = self._tile_to_render(tile.type)
+                glyph_row.extend([glyph] * camera.zoom)
+                color_row.extend([color] * camera.zoom)
+            for _ in range(camera.zoom):
+                glyph_grid.append(glyph_row.copy())
+                color_grid.append(color_row.copy())
+
+        # Overlay villagers
+        for vill in villagers:
+            sx, sy = camera.world_to_screen(vill.x, vill.y)
+            if 0 <= sy < len(glyph_grid) and 0 <= sx < len(glyph_grid[0]):
+                glyph_grid[sy][sx] = "@"
+                color_grid[sy][sx] = Color.UI
+
+        self.clear()
+        self.draw_grid(glyph_grid, color_grid)

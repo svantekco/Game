@@ -15,5 +15,5 @@ pip install -r requirements.txt
 Run the game:
 
 ```bash
-python src/main.py
+python -m src.main
 ```
