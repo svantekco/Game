@@ -12,7 +12,9 @@ class TileType(Enum):
 
 # Camera defaults
 VIEWPORT_WIDTH = 80
-VIEWPORT_HEIGHT = 24
+# Reserve one row for a status panel
+VIEWPORT_HEIGHT = 23
+STATUS_PANEL_Y = VIEWPORT_HEIGHT
 # Discrete zoom levels: 1 cell per tile, 2 cells per tile, etc.
 ZOOM_LEVELS = [1, 2, 4]
 DEFAULT_ZOOM_INDEX = 0
