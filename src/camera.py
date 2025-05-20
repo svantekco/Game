@@ -53,6 +53,10 @@ class Camera:
         if self.zoom_index > 0:
             self.zoom_index -= 1
 
+    def set_zoom_level(self, index: int) -> None:
+        """Set zoom to a specific index within bounds."""
+        self.zoom_index = max(0, min(index, len(ZOOM_LEVELS) - 1))
+
     def world_to_screen(self, wx: int, wy: int) -> tuple[int, int]:
         """Translate world coordinates to screen coordinates."""
         sx = (wx - self.x) * self.zoom

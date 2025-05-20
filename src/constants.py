@@ -4,11 +4,13 @@ from enum import Enum, auto
 MAP_WIDTH = 1000
 MAP_HEIGHT = 1000
 
+
 class TileType(Enum):
     GRASS = auto()
     TREE = auto()
     ROCK = auto()
     WATER = auto()
+
 
 # Camera defaults
 VIEWPORT_WIDTH = 80

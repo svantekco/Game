@@ -184,3 +184,16 @@ class Renderer:
             self.term.refresh()
         else:
             sys.stdout.flush()
+
+    def render_overlay(self, lines: list[str], start_y: int = 0) -> None:
+        """Render generic overlay lines starting at ``start_y``."""
+        for idx, line in enumerate(lines):
+            y = start_y + idx
+            if self.use_curses:
+                self.term.addstr(y, 0, line)
+            else:
+                sys.stdout.write(self.term.move_xy(0, y) + line)
+        if self.use_curses:
+            self.term.refresh()
+        else:
+            sys.stdout.flush()
