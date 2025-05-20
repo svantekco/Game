@@ -5,7 +5,14 @@ import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional
 
-from .constants import CARRY_CAPACITY, TileType, Color, ZOOM_LEVELS, TICK_RATE
+from .constants import (
+    CARRY_CAPACITY,
+    TileType,
+    Color,
+    ZOOM_LEVELS,
+    TICK_RATE,
+    VILLAGER_ACTION_DELAY,
+)
 from .pathfinding import find_nearest_resource, find_path
 from .building import BuildingBlueprint, Building
 
@@ -27,6 +34,7 @@ class Villager:
     target_resource: Optional[Tuple[int, int]] = None
     resource_type: Optional[TileType] = None
     target_building: Optional[Building] = None
+    cooldown: int = 0
 
     # ---------------------------------------------------------------
     def is_full(self) -> bool:
@@ -34,6 +42,9 @@ class Villager:
 
     def update(self, game: "Game") -> None:
         """Finite state machine handling villager behaviour."""
+        if self.cooldown > 0:
+            self.cooldown -= 1
+            return
         if self.state == "idle":
             job = game.dispatch_job()
             if not job:
@@ -64,11 +75,13 @@ class Villager:
         if self.state == "gather":
             if self.target_path:
                 self.position = self.target_path.pop(0)
+                self.cooldown = VILLAGER_ACTION_DELAY
                 return
             if self.target_resource and self.position == self.target_resource:
                 tile = game.map.get_tile(*self.position)
                 gained = tile.extract(1)
                 self.inventory["wood"] += gained
+                self.cooldown = VILLAGER_ACTION_DELAY
                 if self.is_full() or tile.resource_amount == 0:
                     self.state = "deliver"
                     self.target_path = []
@@ -82,18 +95,22 @@ class Villager:
                 self.target_path = path[1:]
             if self.target_path:
                 self.position = self.target_path.pop(0)
+                self.cooldown = VILLAGER_ACTION_DELAY
                 return
             if self.position == game.storage_pos:
                 game.adjust_storage("wood", self.inventory.get("wood", 0))
                 self.inventory["wood"] = 0
+                self.cooldown = VILLAGER_ACTION_DELAY
                 self.state = "idle"
 
         if self.state == "build":
             if self.target_path:
                 self.position = self.target_path.pop(0)
+                self.cooldown = VILLAGER_ACTION_DELAY
                 return
             if self.target_building and self.position == self.target_building.position:
                 self.target_building.progress += 1
+                self.cooldown = VILLAGER_ACTION_DELAY
                 if self.target_building.complete:
                     self.target_building.passable = False
                     if self.target_building in game.build_queue:
@@ -441,10 +458,6 @@ class Game:
                 self.build_queue.append(building)
                 self.buildings.append(building)
                 self.jobs.append(Job("build", building))
-
-        # Update entities
-        for vill in self.entities:
-            vill.update(self)
 
     def render(self) -> None:
         """Draw the current game state."""
