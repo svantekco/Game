@@ -44,11 +44,11 @@ class GameMap:
         if noise < 0.5:
             return Tile(TileType.GRASS, resource_amount=0, passable=True)
         if noise < 0.65:
-            amt = 5 + int(self._hash(x, y) * 15)
+            decorative = self._hash(x + 1, y + 1) < 0.1
+            amt = 0 if decorative else 100
             return Tile(TileType.TREE, resource_amount=amt, passable=False)
         if noise < 0.8:
-            amt = 3 + int(self._hash(x, y + 1) * 8)
-            return Tile(TileType.ROCK, resource_amount=amt, passable=False)
+            return Tile(TileType.ROCK, resource_amount=100, passable=False)
         return Tile(TileType.WATER, resource_amount=0, passable=False)
 
     def get_tile(self, x: int, y: int) -> Tile:
