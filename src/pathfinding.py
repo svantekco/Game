@@ -34,14 +34,25 @@ def _neighbors(pos: Tuple[int, int], gmap: GameMap) -> Iterable[Tuple[int, int]]
 
 
 def _is_passable(pos: Tuple[int, int], gmap: GameMap, buildings: Iterable[object]) -> bool:
+    """Check if the tile at ``pos`` can be traversed."""
+
     x, y = pos
     tile = gmap.get_tile(x, y)
     if not tile.passable:
         return False
+
     for b in buildings:
-        bx, by = getattr(b, "position", (None, None))
-        if bx == x and by == y and not getattr(b, "passable", False):
-            return False
+        # Buildings may span multiple cells via a ``cells`` helper
+        cells: Iterable[Tuple[int, int]]
+        if hasattr(b, "cells"):
+            cells = getattr(b, "cells")()
+        else:
+            bx, by = getattr(b, "position", (None, None))
+            cells = [(bx, by)]
+        for cx, cy in cells:
+            if cx == x and cy == y and not getattr(b, "passable", False):
+                return False
+
     return True
 
 

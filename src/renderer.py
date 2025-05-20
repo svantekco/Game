@@ -80,9 +80,16 @@ class Renderer:
         return "~", Color.WATER
 
     def render_game(
-        self, gmap: "GameMap", camera: "Camera", villagers: list["Villager"]
+        self,
+        gmap: "GameMap",
+        camera: "Camera",
+        villagers: list["Villager"],
+        buildings: list[object] | None = None,
     ) -> None:
-        """Render the visible portion of the map with villagers overlaid."""
+        """Render the visible portion of the map with villagers and buildings."""
+
+        if buildings is None:
+            buildings = []
         glyph_grid: list[list[str]] = []
         color_grid: list[list[Color]] = []
 
@@ -96,9 +103,17 @@ class Renderer:
                 glyph, color = self._tile_to_render(tile.type)
                 glyph_row.extend([glyph] * camera.zoom)
                 color_row.extend([color] * camera.zoom)
-            for _ in range(camera.zoom):
-                glyph_grid.append(glyph_row.copy())
-                color_grid.append(color_row.copy())
+        for _ in range(camera.zoom):
+            glyph_grid.append(glyph_row.copy())
+            color_grid.append(color_row.copy())
+
+        # Overlay buildings
+        for b in buildings:
+            for bx, by in getattr(b, "cells", lambda: [(b.position[0], b.position[1])])():
+                sx, sy = camera.world_to_screen(bx, by)
+                if 0 <= sy < len(glyph_grid) and 0 <= sx < len(glyph_grid[0]):
+                    glyph_grid[sy][sx] = b.blueprint.glyph
+                    color_grid[sy][sx] = b.blueprint.color
 
         # Overlay villager paths first so the villager glyphs appear on top
         for vill in villagers:
