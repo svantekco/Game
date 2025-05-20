@@ -5,7 +5,6 @@ import heapq
 from typing import Dict, List, Optional, Tuple, Iterable, Set
 
 from .map import GameMap
-from .tile import Tile
 from .constants import TileType
 
 
@@ -33,7 +32,9 @@ def _neighbors(pos: Tuple[int, int], gmap: GameMap) -> Iterable[Tuple[int, int]]
         yield (x, y + 1)
 
 
-def _is_passable(pos: Tuple[int, int], gmap: GameMap, buildings: Iterable[object]) -> bool:
+def _is_passable(
+    pos: Tuple[int, int], gmap: GameMap, buildings: Iterable[object]
+) -> bool:
     """Check if the tile at ``pos`` can be traversed."""
 
     x, y = pos
