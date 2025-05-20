@@ -1,4 +1,3 @@
-import builtins
 from src.building import Building, BuildingBlueprint
 from src.constants import Color
 from src.renderer import Renderer

@@ -57,6 +57,27 @@ def _is_passable(
     return True
 
 
+def _is_road(pos: Tuple[int, int], buildings: Iterable[object]) -> bool:
+    """Return True if a completed Road occupies ``pos``."""
+    x, y = pos
+    for b in buildings:
+        if (
+            getattr(b, "position", None) == (x, y)
+            and getattr(b, "blueprint", None) is not None
+            and getattr(b.blueprint, "name", "") == "Road"
+            and getattr(b, "complete", False)
+        ):
+            return True
+    return False
+
+
+def _step_cost(
+    pos: Tuple[int, int], gmap: GameMap, buildings: Iterable[object]
+) -> float:
+    """Return traversal cost for ``pos`` factoring in roads."""
+    return 0.5 if _is_road(pos, buildings) else 1.0
+
+
 def find_path(
     start: Tuple[int, int],
     goal: Tuple[int, int],
@@ -93,7 +114,7 @@ def find_path(
         for n in _neighbors(current, gmap):
             if not _is_passable(n, gmap, buildings):
                 continue
-            tentative_g = g_score[current] + 1
+            tentative_g = g_score[current] + _step_cost(n, gmap, buildings)
             if tentative_g < g_score.get(n, float("inf")):
                 came_from[n] = current
                 g_score[n] = tentative_g
