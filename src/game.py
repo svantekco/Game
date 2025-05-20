@@ -146,7 +146,7 @@ class Game:
         self.buildings: List[Building] = []
         self.build_queue: List[Building] = []
         self.jobs: List[Job] = []
-        self.wood_threshold = 20
+        self.wood_threshold = 60
         self.house_threshold = 50
         self.next_entity_id = 2
         self.pending_spawns: List[Tuple[int, Tuple[int, int]]] = []
@@ -158,28 +158,28 @@ class Game:
                 cost=0,
                 footprint=[(0, 0)],
                 glyph="H",
-                color=Color.UI,
+                color=Color.BUILDING,
             ),
             "Lumberyard": BuildingBlueprint(
                 name="Lumberyard",
                 cost=10,
                 footprint=[(0, 0)],
                 glyph="L",
-                color=Color.UI,
+                color=Color.BUILDING,
             ),
             "House": BuildingBlueprint(
                 name="House",
                 cost=15,
                 footprint=[(0, 0)],
                 glyph="h",
-                color=Color.UI,
+                color=Color.BUILDING,
             ),
             "Storage": BuildingBlueprint(
                 name="Storage",
                 cost=0,
                 footprint=[(0, 0)],
                 glyph="S",
-                color=Color.UI,
+                color=Color.BUILDING,
             ),
         }
         # Global resource storage
@@ -493,7 +493,7 @@ class Game:
         if (
             self.storage["wood"] >= house_bp.cost
             and self.storage["wood"] > self.house_threshold
-            and len(self.entities) < houses * 2
+            and len(self.entities) >= houses * 2
         ):
             pos = self.find_build_site(house_bp)
             if pos:

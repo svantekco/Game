@@ -32,7 +32,9 @@ class Renderer:
         Color.TREE: "yellow",
         Color.ROCK: "white",
         Color.WATER: "blue",
-        Color.UI: "magenta",
+        Color.PATH: "cyan",
+        Color.BUILDING: "magenta",
+        Color.UI: "white",
     }
 
     def __init__(self) -> None:
@@ -179,7 +181,7 @@ class Renderer:
                 sx, sy = camera.world_to_screen(px, py)
                 if 0 <= sy < len(glyph_grid) and 0 <= sx < len(glyph_grid[0]):
                     glyph_grid[sy][sx] = "\xb7"  # middle dot character
-                    color_grid[sy][sx] = Color.UI
+                    color_grid[sy][sx] = Color.PATH
 
         # Overlay villagers
         for vill in villagers:
