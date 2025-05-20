@@ -37,6 +37,7 @@ class Villager:
     target_resource: Optional[Tuple[int, int]] = None
     resource_type: Optional[TileType] = None
     target_building: Optional[Building] = None
+    target_storage: Optional[Tuple[int, int]] = None
     cooldown: int = 0
 
     # ---------------------------------------------------------------
@@ -144,13 +145,17 @@ class Villager:
 
         if self.state == "deliver":
             if not self.target_path:
+                self.target_storage = game.nearest_storage(self.position)
                 path = find_path(
-                    self.position, game.storage_pos, game.map, game.buildings
+                    self.position,
+                    self.target_storage,
+                    game.map,
+                    game.buildings,
                 )
                 self.target_path = path[1:]
             if self._move_step(game):
                 return
-            if self.position == game.storage_pos:
+            if self.position in game.storage_positions:
                 for res in ("wood", "stone"):
                     if self.inventory.get(res, 0) > 0:
                         game.adjust_storage(res, self.inventory.get(res, 0))
@@ -231,6 +236,7 @@ class Game:
         storage.progress = storage.blueprint.build_time
         storage.passable = True
         self.buildings.append(storage)
+        self.storage_positions: List[Tuple[int, int]] = [self.storage_pos]
 
         from collections import defaultdict
 
@@ -301,6 +307,13 @@ class Game:
     def record_tile_usage(self, pos: Tuple[int, int]) -> None:
         """Increment usage counter for ``pos``."""
         self.tile_usage[pos] += 1
+
+    def nearest_storage(self, pos: Tuple[int, int]) -> Tuple[int, int]:
+        """Return the closest storage location to ``pos``."""
+        return min(
+            self.storage_positions,
+            key=lambda s: abs(s[0] - pos[0]) + abs(s[1] - pos[1]),
+        )
 
     def _plan_roads(self) -> None:
         """Build roads on frequently used tiles every minute."""
@@ -401,9 +414,7 @@ class Game:
     def get_search_limit(self) -> int:
         """Return BFS search limit factoring in built Watchtowers."""
         bonus = sum(
-            1
-            for b in self.buildings
-            if b.blueprint.name == "Watchtower" and b.complete
+            1 for b in self.buildings if b.blueprint.name == "Watchtower" and b.complete
         )
         return SEARCH_LIMIT + bonus * 5000
 
@@ -660,6 +671,7 @@ class Game:
                 self.buildings.append(building)
                 self.storage_capacity += MAX_STORAGE
                 self.storage_pos = pos
+                self.storage_positions.append(pos)
 
         # Auto-enqueue Lumberyards when resources allow and none are pending
         lumber_bp = self.blueprints["Lumberyard"]
