@@ -87,9 +87,9 @@ class Renderer:
             if tile is TileType.GRASS:
                 return "\xb7", Color.GRASS
             if tile is TileType.TREE:
-                return "\U0001F333", Color.TREE  # tree emoji
+                return "\U0001f333", Color.TREE  # tree emoji
             if tile is TileType.ROCK:
-                return "\u26F0", Color.ROCK  # mountain
+                return "\u26f0", Color.ROCK  # mountain
             return "\u2248", Color.WATER  # approx waves
         else:
             if tile is TileType.GRASS:
@@ -125,9 +125,9 @@ class Renderer:
                 glyph, color = self._tile_to_render(tile.type, detailed)
                 glyph_row.extend([glyph] * camera.zoom)
                 color_row.extend([color] * camera.zoom)
-        for _ in range(camera.zoom):
-            glyph_grid.append(glyph_row.copy())
-            color_grid.append(color_row.copy())
+            for _ in range(camera.zoom):
+                glyph_grid.append(glyph_row.copy())
+                color_grid.append(color_row.copy())
 
         # Overlay buildings
         for b in buildings:
