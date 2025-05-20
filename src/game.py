@@ -9,7 +9,6 @@ from typing import Dict, List, Tuple, Optional
 from .constants import (
     CARRY_CAPACITY,
     TileType,
-    Color,
     ZOOM_LEVELS,
     TICK_RATE,
     VILLAGER_ACTION_DELAY,
@@ -44,6 +43,15 @@ class Villager:
     def is_full(self) -> bool:
         return sum(self.inventory.values()) >= self.carrying_capacity
 
+    def _apply_tool_bonus(self, game: "Game", delay: int) -> int:
+        """Reduce ``delay`` if near a completed Blacksmith."""
+        for b in game.buildings:
+            if b.blueprint.name == "Blacksmith" and b.complete:
+                bx, by = b.position
+                if abs(bx - self.position[0]) <= 5 and abs(by - self.position[1]) <= 5:
+                    return max(1, delay // 2)
+        return delay
+
     def _move_step(self, game: "Game") -> bool:
         """Move one step along the current path and apply terrain slowdown."""
         if not self.target_path:
@@ -58,9 +66,14 @@ class Villager:
             delay *= 3
         # Roads override terrain slowdown
         for b in game.buildings:
-            if b.position == self.position and b.blueprint.name == "Road" and b.complete:
+            if (
+                b.position == self.position
+                and b.blueprint.name == "Road"
+                and b.complete
+            ):
                 delay = max(1, delay // 2)
                 break
+        delay = self._apply_tool_bonus(game, delay)
         self.cooldown = delay
         return True
 
@@ -123,7 +136,7 @@ class Villager:
                     self.inventory["stone"] += gained
                 else:
                     self.inventory["wood"] += gained
-                self.cooldown = VILLAGER_ACTION_DELAY
+                self.cooldown = self._apply_tool_bonus(game, VILLAGER_ACTION_DELAY)
                 if self.is_full() or tile.resource_amount == 0:
                     self.state = "deliver"
                     self.target_path = []
@@ -142,7 +155,7 @@ class Villager:
                     if self.inventory.get(res, 0) > 0:
                         game.adjust_storage(res, self.inventory.get(res, 0))
                         self.inventory[res] = 0
-                self.cooldown = VILLAGER_ACTION_DELAY
+                self.cooldown = self._apply_tool_bonus(game, VILLAGER_ACTION_DELAY)
                 self.state = "idle"
 
         if self.state == "build":
@@ -150,7 +163,7 @@ class Villager:
                 return
             if self.target_building and self.position == self.target_building.position:
                 self.target_building.progress += 1
-                self.cooldown = VILLAGER_ACTION_DELAY
+                self.cooldown = self._apply_tool_bonus(game, VILLAGER_ACTION_DELAY)
                 if self.target_building.complete:
                     self.target_building.passable = False
                     if self.target_building in game.build_queue:
@@ -201,7 +214,7 @@ class Game:
 
         self.blueprints: Dict[str, BuildingBlueprint] = dict(BLUEPRINTS)
         # Global resource storage
-        self.storage: Dict[str, int] = {"wood": 0, "stone": 0}
+        self.storage: Dict[str, int] = {"wood": 0, "stone": 0, "food": 0}
         self.storage_capacity = MAX_STORAGE
 
         # Place Town Hall at the starting location
@@ -220,6 +233,7 @@ class Game:
         self.buildings.append(storage)
 
         from collections import defaultdict
+
         self.tile_usage: Dict[Tuple[int, int], int] = defaultdict(int)
 
         self.renderer = Renderer()
@@ -313,6 +327,14 @@ class Game:
             self.buildings.append(building)
             self.jobs.append(Job("build", building))
         self.tile_usage.clear()
+
+    def _produce_food(self) -> None:
+        """Generate food from completed farms periodically."""
+        if self.tick_count % (self.tick_rate * 5) != 0:
+            return
+        farms = [b for b in self.buildings if b.blueprint.name == "Farm" and b.complete]
+        for _ in farms:
+            self.adjust_storage("food", 1)
 
     def _find_start_pos(self) -> Tuple[int, int]:
         """Find the nearest passable tile to start the village on."""
@@ -520,8 +542,6 @@ class Game:
         """Process input and update world state."""
         term = self.renderer.term
         if self.renderer.use_curses:
-            import curses
-
             ch = term.getch()
             key = ch if ch != -1 else None
         else:
@@ -602,6 +622,7 @@ class Game:
         # Process pending villager spawns
         self._process_spawns()
         self._plan_roads()
+        self._produce_food()
 
         # Prioritise building a Quarry when possible
         quarry_bp = self.blueprints["Quarry"]
@@ -657,6 +678,23 @@ class Game:
                 self.buildings.append(building)
                 self.jobs.append(Job("build", building))
 
+        # Build a Blacksmith when resources allow and none exist
+        black_bp = self.blueprints.get("Blacksmith")
+        if black_bp and (
+            self.storage["wood"] >= black_bp.wood
+            and self.storage["stone"] >= black_bp.stone
+            and not any(b.blueprint.name == "Blacksmith" for b in self.build_queue)
+            and not any(b.blueprint.name == "Blacksmith" for b in self.buildings)
+        ):
+            pos = self.find_build_site(black_bp)
+            if pos:
+                self.storage["wood"] -= black_bp.wood
+                self.storage["stone"] -= black_bp.stone
+                building = Building(black_bp, pos)
+                self.build_queue.append(building)
+                self.buildings.append(building)
+                self.jobs.append(Job("build", building))
+
         # House expansion and population growth
         house_bp = self.blueprints["House"]
         houses = len([b for b in self.buildings if b.blueprint.name == "House"])
@@ -700,6 +738,7 @@ class Game:
             f"Zoom:{self.camera.zoom} "
             f"Wood:{self.storage['wood']} "
             f"Stone:{self.storage['stone']} "
+            f"Food:{self.storage['food']} "
             f"Cap:{self.storage_capacity} "
             f"Pop:{len(self.entities)}"
         )
