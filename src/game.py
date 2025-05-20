@@ -12,6 +12,7 @@ from .constants import (
     ZOOM_LEVELS,
     TICK_RATE,
     VILLAGER_ACTION_DELAY,
+    MAX_STORAGE,
 )
 from .pathfinding import find_nearest_resource, find_path
 from .building import BuildingBlueprint, Building
@@ -173,28 +174,42 @@ class Game:
                 glyph="h",
                 color=Color.UI,
             ),
+            "Storage": BuildingBlueprint(
+                name="Storage",
+                cost=0,
+                footprint=[(0, 0)],
+                glyph="S",
+                color=Color.UI,
+            ),
         }
         # Global resource storage
         self.storage: Dict[str, int] = {"wood": 0, "stone": 0}
-        # Storage location (centre of the map, adjusted to a passable tile)
-        self.storage_pos: Tuple[int, int] = self._find_start_pos()
+        self.storage_capacity = MAX_STORAGE
 
-        self.renderer = Renderer()
-        self.camera = Camera()
-        # Start fully zoomed out and centred on the first villager
-        self.camera.set_zoom_level(len(ZOOM_LEVELS) - 1)
-
-        # Starting building - Town Hall at storage location
-        townhall = Building(self.blueprints["TownHall"], self.storage_pos, progress=0)
+        # Place Town Hall at the starting location
+        self.townhall_pos: Tuple[int, int] = self._find_start_pos()
+        townhall = Building(self.blueprints["TownHall"], self.townhall_pos, progress=0)
         townhall.progress = townhall.blueprint.cost
-        # Keep the Town Hall passable so villagers can deliver resources
         townhall.passable = True
         self.buildings.append(townhall)
 
-        # Create a single villager at the storage location as a demo
-        self.entities.append(Villager(id=1, position=self.storage_pos))
+        # Place initial Storage building 5 tiles east of the Town Hall
+        candidate = (self.townhall_pos[0] + 5, self.townhall_pos[1])
+        self.storage_pos = self._find_nearest_passable(candidate)
+        storage = Building(self.blueprints["Storage"], self.storage_pos, progress=0)
+        storage.progress = storage.blueprint.cost
+        storage.passable = True
+        self.buildings.append(storage)
+
+        self.renderer = Renderer()
+        self.camera = Camera()
+        # Start fully zoomed out and centred on the town hall
+        self.camera.set_zoom_level(len(ZOOM_LEVELS) - 1)
+
+        # Create a single villager at the Town Hall as a demo
+        self.entities.append(Villager(id=1, position=self.townhall_pos))
         self.camera.center_on(
-            self.storage_pos[0], self.storage_pos[1], self.map.width, self.map.height
+            self.townhall_pos[0], self.townhall_pos[1], self.map.width, self.map.height
         )
 
         self.running = False
@@ -216,7 +231,15 @@ class Game:
     # --- Resource Helpers ---------------------------------------------
     def adjust_storage(self, resource: str, amount: int) -> None:
         """Add or remove resources from global storage."""
-        self.storage[resource] = self.storage.get(resource, 0) + amount
+        current_total = sum(self.storage.values())
+        if amount > 0:
+            available = self.storage_capacity - current_total
+            if available <= 0:
+                return
+            amount = min(amount, available)
+            self.storage[resource] = self.storage.get(resource, 0) + amount
+        else:
+            self.storage[resource] = self.storage.get(resource, 0) + amount
         if self.storage[resource] < 0:
             self.storage[resource] = 0
 
@@ -240,6 +263,27 @@ class Game:
     def _find_start_pos(self) -> Tuple[int, int]:
         """Find the nearest passable tile to start the village on."""
         origin = (self.map.width // 2, self.map.height // 2)
+        from collections import deque
+
+        q = deque([origin])
+        visited = {origin}
+        while q:
+            x, y = q.popleft()
+            if self.map.get_tile(x, y).passable:
+                return (x, y)
+            for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+                nx, ny = x + dx, y + dy
+                if (
+                    0 <= nx < self.map.width
+                    and 0 <= ny < self.map.height
+                    and (nx, ny) not in visited
+                ):
+                    visited.add((nx, ny))
+                    q.append((nx, ny))
+        return origin
+
+    def _find_nearest_passable(self, origin: Tuple[int, int]) -> Tuple[int, int]:
+        """Return the closest passable tile to ``origin``."""
         from collections import deque
 
         q = deque([origin])
@@ -480,7 +524,7 @@ class Game:
             f"Tick:{self.tick_count} "
             f"Cam:{self.camera.x},{self.camera.y} "
             f"Zoom:{self.camera.zoom} "
-            f"Wood:{self.storage['wood']} "
+            f"Wood:{self.storage['wood']}/{self.storage_capacity} "
             f"Pop:{len(self.entities)}"
         )
         if self.show_fps:

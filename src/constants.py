@@ -32,6 +32,9 @@ CARRY_CAPACITY = 10
 # Minimum number of ticks between villager actions
 VILLAGER_ACTION_DELAY = 30
 
+# Maximum combined resources that can be stored
+MAX_STORAGE = 100
+
 
 class Color(Enum):
     """Logical color identifiers used for rendering."""
