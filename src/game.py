@@ -51,12 +51,15 @@ class Villager:
             if not job:
                 return
             if job.type == "gather":
+                resource_type = (
+                    job.payload if isinstance(job.payload, TileType) else TileType.TREE
+                )
                 pos, path = find_nearest_resource(
-                    self.position, TileType.TREE, game.map, game.buildings
+                    self.position, resource_type, game.map, game.buildings
                 )
                 if pos is None:
                     return
-                self.resource_type = TileType.TREE
+                self.resource_type = resource_type
                 self.target_resource = pos
                 self.target_path = path[1:]
                 self.state = "gather"
@@ -81,7 +84,10 @@ class Villager:
             if self.target_resource and self.position == self.target_resource:
                 tile = game.map.get_tile(*self.position)
                 gained = tile.extract(1)
-                self.inventory["wood"] += gained
+                if self.resource_type is TileType.ROCK:
+                    self.inventory["stone"] += gained
+                else:
+                    self.inventory["wood"] += gained
                 self.cooldown = VILLAGER_ACTION_DELAY
                 if self.is_full() or tile.resource_amount == 0:
                     self.state = "deliver"
@@ -99,8 +105,10 @@ class Villager:
                 self.cooldown = VILLAGER_ACTION_DELAY
                 return
             if self.position == game.storage_pos:
-                game.adjust_storage("wood", self.inventory.get("wood", 0))
-                self.inventory["wood"] = 0
+                for res in ("wood", "stone"):
+                    if self.inventory.get(res, 0) > 0:
+                        game.adjust_storage(res, self.inventory.get(res, 0))
+                        self.inventory[res] = 0
                 self.cooldown = VILLAGER_ACTION_DELAY
                 self.state = "idle"
 
@@ -147,6 +155,7 @@ class Game:
         self.build_queue: List[Building] = []
         self.jobs: List[Job] = []
         self.wood_threshold = 60
+        self.stone_threshold = 40
         self.house_threshold = 50
         self.next_entity_id = 2
         self.pending_spawns: List[Tuple[int, Tuple[int, int]]] = []
@@ -155,31 +164,39 @@ class Game:
         self.blueprints: Dict[str, BuildingBlueprint] = {
             "TownHall": BuildingBlueprint(
                 name="TownHall",
-                cost=0,
+                build_time=0,
                 footprint=[(0, 0)],
                 glyph="H",
                 color=Color.BUILDING,
+                wood=0,
+                stone=0,
             ),
             "Lumberyard": BuildingBlueprint(
                 name="Lumberyard",
-                cost=10,
+                build_time=10,
                 footprint=[(0, 0)],
                 glyph="L",
                 color=Color.BUILDING,
+                wood=10,
+                stone=0,
             ),
             "House": BuildingBlueprint(
                 name="House",
-                cost=15,
+                build_time=15,
                 footprint=[(0, 0)],
                 glyph="h",
                 color=Color.BUILDING,
+                wood=15,
+                stone=0,
             ),
             "Storage": BuildingBlueprint(
                 name="Storage",
-                cost=0,
+                build_time=0,
                 footprint=[(0, 0)],
                 glyph="S",
                 color=Color.BUILDING,
+                wood=20,
+                stone=20,
             ),
         }
         # Global resource storage
@@ -189,7 +206,7 @@ class Game:
         # Place Town Hall at the starting location
         self.townhall_pos: Tuple[int, int] = self._find_start_pos()
         townhall = Building(self.blueprints["TownHall"], self.townhall_pos, progress=0)
-        townhall.progress = townhall.blueprint.cost
+        townhall.progress = townhall.blueprint.build_time
         townhall.passable = True
         self.buildings.append(townhall)
 
@@ -197,7 +214,7 @@ class Game:
         candidate = (self.townhall_pos[0] + 5, self.townhall_pos[1])
         self.storage_pos = self._find_nearest_passable(candidate)
         storage = Building(self.blueprints["Storage"], self.storage_pos, progress=0)
-        storage.progress = storage.blueprint.cost
+        storage.progress = storage.blueprint.build_time
         storage.passable = True
         self.buildings.append(storage)
 
@@ -349,6 +366,9 @@ class Game:
         if self.storage["wood"] < self.wood_threshold:
             return Job("gather", TileType.TREE)
 
+        if self.storage["stone"] < self.stone_threshold:
+            return Job("gather", TileType.ROCK)
+
         return None
 
     # --- Game Loop -----------------------------------------------------
@@ -476,12 +496,15 @@ class Game:
 
         # Auto-enqueue Lumberyards when resources allow and none are pending
         lumber_bp = self.blueprints["Lumberyard"]
-        if self.storage["wood"] >= lumber_bp.cost and not any(
-            b.blueprint.name == "Lumberyard" for b in self.build_queue
+        if (
+            self.storage["wood"] >= lumber_bp.wood
+            and self.storage["stone"] >= lumber_bp.stone
+            and not any(b.blueprint.name == "Lumberyard" for b in self.build_queue)
         ):
             pos = self.find_build_site(lumber_bp)
             if pos:
-                self.storage["wood"] -= lumber_bp.cost
+                self.storage["wood"] -= lumber_bp.wood
+                self.storage["stone"] -= lumber_bp.stone
                 building = Building(lumber_bp, pos)
                 self.build_queue.append(building)
                 self.buildings.append(building)
@@ -491,13 +514,15 @@ class Game:
         house_bp = self.blueprints["House"]
         houses = len([b for b in self.buildings if b.blueprint.name == "House"])
         if (
-            self.storage["wood"] >= house_bp.cost
+            self.storage["wood"] >= house_bp.wood
+            and self.storage["stone"] >= house_bp.stone
             and self.storage["wood"] > self.house_threshold
             and len(self.entities) >= houses * 2
         ):
             pos = self.find_build_site(house_bp)
             if pos:
-                self.storage["wood"] -= house_bp.cost
+                self.storage["wood"] -= house_bp.wood
+                self.storage["stone"] -= house_bp.stone
                 building = Building(house_bp, pos)
                 self.build_queue.append(building)
                 self.buildings.append(building)
@@ -524,7 +549,9 @@ class Game:
             f"Tick:{self.tick_count} "
             f"Cam:{self.camera.x},{self.camera.y} "
             f"Zoom:{self.camera.zoom} "
-            f"Wood:{self.storage['wood']}/{self.storage_capacity} "
+            f"Wood:{self.storage['wood']} "
+            f"Stone:{self.storage['stone']} "
+            f"Cap:{self.storage_capacity} "
             f"Pop:{len(self.entities)}"
         )
         if self.show_fps:

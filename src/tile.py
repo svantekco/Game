@@ -23,7 +23,8 @@ class Tile:
             return 0
         removed = min(self.resource_amount, amount)
         self.resource_amount -= removed
-        # Trees/Rocks become passable when depleted
+        # Trees/Rocks disappear when depleted
         if self.resource_amount == 0 and self.type in (TileType.TREE, TileType.ROCK):
+            self.type = TileType.GRASS
             self.passable = True
         return removed

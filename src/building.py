@@ -11,10 +11,12 @@ class BuildingBlueprint:
     """Template for constructing buildings."""
 
     name: str
-    cost: int
+    build_time: int
     footprint: List[Tuple[int, int]]
     glyph: str
     color: Color
+    wood: int = 0
+    stone: int = 0
 
 
 @dataclass
@@ -35,4 +37,4 @@ class Building:
 
     @property
     def complete(self) -> bool:
-        return self.progress >= self.blueprint.cost
+        return self.progress >= self.blueprint.build_time
