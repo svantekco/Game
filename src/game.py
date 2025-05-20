@@ -330,8 +330,6 @@ class Game:
                 vill.update(self)
             self.tick_count += 1
             self.single_step = False
-            elif key.lower() == "q":
-                self.running = False
 
         # Process pending villager spawns
         self._process_spawns()

@@ -32,14 +32,14 @@ $ git clone https://github.com/your‑handle/villagesim.git
 $ cd villagesim
 
 # Create and activate a virtual environment
-$ python -m venv .venv
+$ python3 -m venv .venv
 $ source .venv/bin/activate            # Windows: .venv\Scripts\activate
 
 # Install dependencies
 $ pip install -r requirements.txt
 
 # Run the game
-$ python -m src.main [--seed 42] [--show-fps] [-v]
+$ python3 -m src.main [--seed 42] [--show-fps] [-v]
 ```
 
 ### Default Controls
