@@ -76,7 +76,9 @@ class Villager:
 
         if self.state == "deliver":
             if not self.target_path:
-                path = find_path(self.position, game.storage_pos, game.map, game.buildings)
+                path = find_path(
+                    self.position, game.storage_pos, game.map, game.buildings
+                )
                 self.target_path = path[1:]
             if self.target_path:
                 self.position = self.target_path.pop(0)
@@ -85,7 +87,7 @@ class Villager:
                 game.adjust_storage("wood", self.inventory.get("wood", 0))
                 self.inventory["wood"] = 0
                 self.state = "idle"
-        
+
         if self.state == "build":
             if self.target_path:
                 self.position = self.target_path.pop(0)
@@ -96,6 +98,8 @@ class Villager:
                     self.target_building.passable = False
                     if self.target_building in game.build_queue:
                         game.build_queue.remove(self.target_building)
+                    if self.target_building.blueprint.name == "House":
+                        game.schedule_spawn(self.target_building.position)
                 self.state = "idle"
 
     @property
@@ -125,6 +129,9 @@ class Game:
         self.build_queue: List[Building] = []
         self.jobs: List[Job] = []
         self.wood_threshold = 20
+        self.house_threshold = 50
+        self.next_entity_id = 2
+        self.pending_spawns: List[Tuple[int, Tuple[int, int]]] = []
 
         # Predefined blueprints
         self.blueprints: Dict[str, BuildingBlueprint] = {
@@ -140,6 +147,13 @@ class Game:
                 cost=10,
                 footprint=[(0, 0)],
                 glyph="L",
+                color=Color.UI,
+            ),
+            "House": BuildingBlueprint(
+                name="House",
+                cost=15,
+                footprint=[(0, 0)],
+                glyph="h",
                 color=Color.UI,
             ),
         }
@@ -177,8 +191,27 @@ class Game:
         if self.storage[resource] < 0:
             self.storage[resource] = 0
 
+    # --- Population Helpers -----------------------------------------
+    def schedule_spawn(self, position: Tuple[int, int], delay: int = 10) -> None:
+        """Schedule a villager to spawn after ``delay`` ticks."""
+        self.pending_spawns.append([delay, position])
+
+    def _process_spawns(self) -> None:
+        for spawn in list(self.pending_spawns):
+            spawn[0] -= 1
+            if spawn[0] <= 0:
+                self._spawn_villager(spawn[1])
+                self.pending_spawns.remove(spawn)
+
+    def _spawn_villager(self, position: Tuple[int, int]) -> None:
+        villager = Villager(id=self.next_entity_id, position=position)
+        self.next_entity_id += 1
+        self.entities.append(villager)
+
     # --- Building Helpers --------------------------------------------
-    def is_area_free(self, origin: Tuple[int, int], blueprint: BuildingBlueprint) -> bool:
+    def is_area_free(
+        self, origin: Tuple[int, int], blueprint: BuildingBlueprint
+    ) -> bool:
         for dx, dy in blueprint.footprint:
             x = origin[0] + dx
             y = origin[1] + dy
@@ -187,12 +220,16 @@ class Game:
             if not self.map.get_tile(x, y).passable:
                 return False
             for b in self.buildings:
-                for cx, cy in getattr(b, "cells", lambda: [(b.position[0], b.position[1])])():
+                for cx, cy in getattr(
+                    b, "cells", lambda: [(b.position[0], b.position[1])]
+                )():
                     if cx == x and cy == y:
                         return False
         return True
 
-    def find_build_site(self, blueprint: BuildingBlueprint) -> Optional[Tuple[int, int]]:
+    def find_build_site(
+        self, blueprint: BuildingBlueprint
+    ) -> Optional[Tuple[int, int]]:
         from collections import deque
 
         starts = [b.position for b in self.buildings] or [self.storage_pos]
@@ -217,15 +254,6 @@ class Game:
         if self.storage["wood"] < self.wood_threshold:
             return Job("gather", TileType.TREE)
 
-        blueprint = self.blueprints["Lumberyard"]
-        if self.storage["wood"] >= blueprint.cost and not self.build_queue:
-            pos = self.find_build_site(blueprint)
-            if pos:
-                self.storage["wood"] -= blueprint.cost
-                building = Building(blueprint, pos)
-                self.build_queue.append(building)
-                self.buildings.append(building)
-                return Job("build", building)
         return None
 
     # --- Game Loop -----------------------------------------------------
@@ -280,10 +308,10 @@ class Game:
                 self.camera.move(0, -1, self.map.width, self.map.height)
             elif key.code == term.KEY_DOWN:
                 self.camera.move(0, 1, self.map.width, self.map.height)
-            elif key == '+':
+            elif key == "+":
                 self.camera.zoom_in()
                 self.camera.move(0, 0, self.map.width, self.map.height)
-            elif key == '-':
+            elif key == "-":
                 self.camera.zoom_out()
                 self.camera.move(0, 0, self.map.width, self.map.height)
             elif key == ' ':
@@ -302,6 +330,44 @@ class Game:
                 vill.update(self)
             self.tick_count += 1
             self.single_step = False
+            elif key.lower() == "q":
+                self.running = False
+
+        # Process pending villager spawns
+        self._process_spawns()
+
+        # Auto-enqueue Lumberyards when resources allow and none are pending
+        lumber_bp = self.blueprints["Lumberyard"]
+        if self.storage["wood"] >= lumber_bp.cost and not any(
+            b.blueprint.name == "Lumberyard" for b in self.build_queue
+        ):
+            pos = self.find_build_site(lumber_bp)
+            if pos:
+                self.storage["wood"] -= lumber_bp.cost
+                building = Building(lumber_bp, pos)
+                self.build_queue.append(building)
+                self.buildings.append(building)
+                self.jobs.append(Job("build", building))
+
+        # House expansion and population growth
+        house_bp = self.blueprints["House"]
+        houses = len([b for b in self.buildings if b.blueprint.name == "House"])
+        if (
+            self.storage["wood"] >= house_bp.cost
+            and self.storage["wood"] > self.house_threshold
+            and len(self.entities) < houses * 2
+        ):
+            pos = self.find_build_site(house_bp)
+            if pos:
+                self.storage["wood"] -= house_bp.cost
+                building = Building(house_bp, pos)
+                self.build_queue.append(building)
+                self.buildings.append(building)
+                self.jobs.append(Job("build", building))
+
+        # Update entities
+        for vill in self.entities:
+            vill.update(self)
 
     def render(self) -> None:
         """Draw the current game state."""
