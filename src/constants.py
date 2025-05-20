@@ -35,6 +35,10 @@ VILLAGER_ACTION_DELAY = 30
 # Maximum combined resources that can be stored
 MAX_STORAGE = 100
 
+# Maximum nodes explored during breadth-first searches to avoid hangs on
+# extremely large maps.
+SEARCH_LIMIT = 10000
+
 
 class Color(Enum):
     """Logical color identifiers used for rendering."""

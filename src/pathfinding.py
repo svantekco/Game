@@ -5,7 +5,7 @@ import heapq
 from typing import Dict, List, Optional, Tuple, Iterable, Set
 
 from .map import GameMap
-from .constants import TileType
+from .constants import TileType, SEARCH_LIMIT
 
 
 @dataclass(order=True)
@@ -109,6 +109,8 @@ def find_nearest_resource(
     resource_type: TileType,
     gmap: GameMap,
     buildings: Iterable[object] | None = None,
+    *,
+    search_limit: int = SEARCH_LIMIT,
 ) -> Tuple[Optional[Tuple[int, int]], List[Tuple[int, int]]]:
     """Find the closest tile of the given resource type and a path to it."""
 
@@ -120,9 +122,13 @@ def find_nearest_resource(
     frontier = deque([start])
     came_from: Dict[Tuple[int, int], Tuple[int, int]] = {}
     visited: Set[Tuple[int, int]] = {start}
+    explored = 0
 
     while frontier:
         current = frontier.popleft()
+        explored += 1
+        if explored > search_limit:
+            break
         tile = gmap.get_tile(*current)
         if tile.type is resource_type and tile.resource_amount > 0:
             path: List[Tuple[int, int]] = [current]
