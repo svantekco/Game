@@ -363,6 +363,13 @@ class Game:
         if self.jobs:
             return self.jobs.pop(0)
 
+        # Ensure we always have enough resources to build new storage
+        storage_bp = self.blueprints["Storage"]
+        if self.storage["wood"] < storage_bp.wood:
+            return Job("gather", TileType.TREE)
+        if self.storage["stone"] < storage_bp.stone:
+            return Job("gather", TileType.ROCK)
+
         if self.storage["wood"] < self.wood_threshold:
             return Job("gather", TileType.TREE)
 
@@ -493,6 +500,26 @@ class Game:
 
         # Process pending villager spawns
         self._process_spawns()
+
+        # Build additional storage when nearing capacity
+        storage_bp = self.blueprints["Storage"]
+        total = sum(self.storage.values())
+        if (
+            total >= self.storage_capacity - 20
+            and self.storage["wood"] >= storage_bp.wood
+            and self.storage["stone"] >= storage_bp.stone
+            and not any(b.blueprint.name == "Storage" for b in self.build_queue)
+        ):
+            pos = self.find_build_site(storage_bp)
+            if pos:
+                self.storage["wood"] -= storage_bp.wood
+                self.storage["stone"] -= storage_bp.stone
+                building = Building(storage_bp, pos, progress=0)
+                building.progress = storage_bp.build_time
+                building.passable = True
+                self.buildings.append(building)
+                self.storage_capacity += MAX_STORAGE
+                self.storage_pos = pos
 
         # Auto-enqueue Lumberyards when resources allow and none are pending
         lumber_bp = self.blueprints["Lumberyard"]
