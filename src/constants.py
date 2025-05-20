@@ -29,6 +29,9 @@ TICK_RATE = 60
 # Amount of resources a villager can carry at once
 CARRY_CAPACITY = 10
 
+# Minimum number of ticks between villager actions
+VILLAGER_ACTION_DELAY = 30
+
 
 class Color(Enum):
     """Logical color identifiers used for rendering."""
