@@ -22,6 +22,18 @@ Powered by the **blessed** TUI library (with a curses fallback), VillageSim runs
 * **HUD & Controls** – Real‑time stats panel plus hotkeys for pause, step, help, and camera centring.
 * **Extensible & Test‑Backed** – Modular architecture, unit tests, and CI workflow encourage contribution and experimentation.
 
+## Game Logic
+
+VillageSim runs on a simple tick loop managed by the `Game` class. During each tick the game:
+
+1. Processes input to move or zoom the camera and toggle overlays.
+2. Updates every `Villager` using a finite‑state machine with `idle`, `gather`, `deliver` and `build` states.
+3. Dispatches jobs so villagers collect resources or work on buildings.
+4. Spawns new villagers from completed houses, produces food at farms and plans roads on frequently used tiles.
+5. Draws the current world state and status information.
+
+Tiles are generated lazily via value noise so the 100k×100k world remains memory efficient.
+
 ---
 
 ## Quick Start
