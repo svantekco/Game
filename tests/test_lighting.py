@@ -1,4 +1,4 @@
-from src.filters import apply_lighting, day_night_filter, zone_filter, ColorRGB, BASE_TILE_COLOURS
+from src.filters import apply_lighting, day_night_filter, zone_filter
 from src.tile import Tile
 from src.constants import TileType, ZoneType
 
