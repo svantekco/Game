@@ -33,6 +33,7 @@ class Building:
     level: int = 1
     capacity: int = 0
     efficiency: float = 1.0
+    builder_id: int | None = None
 
     # ---------------------------------------------------------------
     def upgrade_cost(self) -> Tuple[int, int]:
