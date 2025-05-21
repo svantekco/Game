@@ -1,4 +1,4 @@
-from src.game import Game, Job
+from src.game import Game
 from src.building import Building
 
 
@@ -10,7 +10,7 @@ def test_villager_stays_adjacent_while_building():
     building = Building(bp, pos)
     game.buildings.append(building)
     game.build_queue.append(building)
-    game.jobs.append(Job("build", building))
+    game._assign_builder(building)
 
     building_positions = []
     started = False

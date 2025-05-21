@@ -33,6 +33,7 @@ class Job:
 
     type: str  # "gather" or "build"
     payload: object | None = None
+    target_villager: int | None = None
 
 
 class Game:
@@ -222,6 +223,17 @@ class Game:
             key=lambda s: abs(s[0] - pos[0]) + abs(s[1] - pos[1]),
         )
 
+    def _assign_builder(self, building: Building) -> None:
+        """Assign the nearest villager to construct ``building``."""
+        if not self.entities:
+            return
+        builder = min(
+            self.entities,
+            key=lambda v: abs(v.x - building.position[0]) + abs(v.y - building.position[1]),
+        )
+        building.builder_id = builder.id
+        self.jobs.append(Job("build", building, target_villager=builder.id))
+
     def _plan_roads(self) -> None:
         """Build roads on frequently used tiles every minute."""
         if self.tick_count % (self.tick_rate * 60) != 0:
@@ -245,7 +257,7 @@ class Game:
             self.storage["stone"] -= road_bp.stone
             self.build_queue.append(building)
             self.buildings.append(building)
-            self.jobs.append(Job("build", building))
+            self._assign_builder(building)
         self.tile_usage.clear()
 
     def _produce_food(self) -> None:
@@ -442,9 +454,11 @@ class Game:
                 q.append(cand)
         return best if best_score > 0 else None
 
-    def dispatch_job(self) -> Optional[Job]:
+    def dispatch_job(self, villager: Villager) -> Optional[Job]:
         if self.jobs:
-            return self.jobs.pop(0)
+            for i, job in enumerate(self.jobs):
+                if job.target_villager is None or job.target_villager == villager.id:
+                    return self.jobs.pop(i)
 
         # Ensure we always have enough resources to build new storage
         storage_bp = self.blueprints["Storage"]
@@ -681,7 +695,7 @@ class Game:
                 building = Building(quarry_bp, pos)
                 self.build_queue.append(building)
                 self.buildings.append(building)
-                self.jobs.append(Job("build", building))
+                self._assign_builder(building)
 
         # Build additional storage when nearing capacity
         storage_bp = self.blueprints["Storage"]
@@ -727,7 +741,7 @@ class Game:
                 building = Building(lumber_bp, pos)
                 self.build_queue.append(building)
                 self.buildings.append(building)
-                self.jobs.append(Job("build", building))
+                self._assign_builder(building)
 
         # Build a Blacksmith when resources allow and none exist
         black_bp = self.blueprints.get("Blacksmith")
@@ -748,7 +762,7 @@ class Game:
                 building = Building(black_bp, pos)
                 self.build_queue.append(building)
                 self.buildings.append(building)
-                self.jobs.append(Job("build", building))
+                self._assign_builder(building)
 
         # House expansion and population growth
         house_bp = self.blueprints["House"]
@@ -770,7 +784,7 @@ class Game:
                 building = Building(house_bp, pos)
                 self.build_queue.append(building)
                 self.buildings.append(building)
-                self.jobs.append(Job("build", building))
+                self._assign_builder(building)
 
     def render(self) -> None:
         """Draw the current game state."""

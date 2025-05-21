@@ -203,7 +203,7 @@ class Villager:
             self.cooldown -= 1
             return
         if self.state == "idle":
-            job = game.dispatch_job()
+            job = game.dispatch_job(self)
             if not job:
                 self.adjust_mood(-1)
                 return
