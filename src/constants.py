@@ -46,6 +46,9 @@ MAX_STORAGE = 100
 # extremely large maps.
 SEARCH_LIMIT = 10000
 
+# Fixed colour for all UI elements (RGB)
+UI_COLOR_RGB = (255, 255, 255)
+
 
 class Color(Enum):
     """Logical color identifiers used for rendering."""
