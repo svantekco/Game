@@ -16,7 +16,7 @@ def test_find_path_valid_steps():
         assert dx == 1
 
 
-def test_find_nearest_resource_prefers_roads():
+def test_find_nearest_resource_ignores_roads():
     gmap = GameMap(seed=1)
     road_bp = BLUEPRINTS["Road"]
     roads = [
@@ -33,7 +33,7 @@ def test_find_nearest_resource_prefers_roads():
     gmap.get_tile(0, 3).resource_amount = 100
 
     pos, _ = find_nearest_resource((0, 0), TileType.ROCK, gmap, roads, search_limit=20)
-    assert pos == (0, 3)
+    assert pos == (2, 0)
 
 
 def test_hierarchical_path_returns_to_goal():

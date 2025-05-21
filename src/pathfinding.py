@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import heapq
+import random
 from typing import Dict, List, Optional, Tuple, Iterable, Set
 
 from .map import GameMap
@@ -219,40 +220,35 @@ def find_nearest_resource(
     if buildings is None:
         buildings = []
 
-    open_heap: List[_PQNode] = []
-    heapq.heappush(open_heap, _PQNode(0.0, 0, start))
-    came_from: Dict[Tuple[int, int], Tuple[int, int]] = {}
-    g_score: Dict[Tuple[int, int], float] = {start: 0.0}
+    from collections import deque
+
+    q = deque([start])
+    came_from: Dict[Tuple[int, int], Tuple[int, int] | None] = {start: None}
     explored = 0
-    counter = 1
 
-    while open_heap:
-        node = heapq.heappop(open_heap)
-        current = node.position
-
+    while q and explored < search_limit:
+        current = q.popleft()
         explored += 1
-        if explored > search_limit:
-            break
 
         tile = gmap.get_tile(*current)
         if tile.type is resource_type and tile.resource_amount > 0:
             found = current
             path: List[Tuple[int, int]] = [current]
-            while current in came_from:
-                current = came_from[current]
+            while came_from[current] is not None:
+                current = came_from[current]  # type: ignore[index]
                 path.append(current)
             path.reverse()
             return found, path
 
-        for n in _neighbors(current, gmap):
+        neighbors = list(_neighbors(current, gmap))
+        random.shuffle(neighbors)
+        for n in neighbors:
+            if n in came_from:
+                continue
             if not _is_passable(n, gmap, buildings):
                 continue
-            tentative_g = g_score[current] + _step_cost(n, gmap, buildings)
-            if tentative_g < g_score.get(n, float("inf")):
-                g_score[n] = tentative_g
-                came_from[n] = current
-                heapq.heappush(open_heap, _PQNode(tentative_g, counter, n))
-                counter += 1
+            came_from[n] = current
+            q.append(n)
 
     return None, []
 

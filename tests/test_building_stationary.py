@@ -12,6 +12,8 @@ def test_villager_stays_adjacent_while_building():
     game.build_queue.append(building)
     game._assign_builder(building)
 
+    game.world.tick_count = game.world.day_length // 4
+
     building_positions = []
     started = False
     for _ in range(bp.build_time + 5):

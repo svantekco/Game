@@ -41,10 +41,10 @@ def apply_lighting(
 ) -> ColorRGB:
     """Return final colour for ``tile`` after applying ``filters``.
 
-    Results are cached based on tile type, zone and day fraction (rounded to two
-    decimal places) so repeated frames are faster.
+    Results are cached based on tile type, zone and the current hour so repeated
+    frames are faster.
     """
-    day_key = int(day_fraction * 100)
+    day_key = int(day_fraction * 24)
     key = (tile.type, tile.zone, day_key, tuple(filters))
     if key in _CACHE:
         return _CACHE[key]
@@ -68,7 +68,9 @@ def day_night_filter(color: ColorRGB, tile: Tile, day_fraction: float) -> ColorR
     ``day_fraction`` should be in ``[0,1]`` where ``0`` is midnight and ``0.5``
     is noon.
     """
-    brightness = 0.3 + 0.7 * math.sin(math.pi * day_fraction)
+    hour = int(day_fraction * 24)
+    hour_fraction = hour / 24
+    brightness = 0.3 + 0.7 * math.sin(math.pi * hour_fraction)
     r, g, b = color
     return (int(r * brightness), int(g * brightness), int(b * brightness))
 

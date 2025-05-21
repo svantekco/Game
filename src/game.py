@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import time
+import random
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
@@ -135,6 +136,8 @@ class Game:
         self.show_fps = False
         self.current_fps = 0.0
         self.last_tick_ms = 0.0
+        # Pause counter used when panning the camera
+        self.pan_pause = 0
 
         # Track overlay state so the renderer can clear when toggled.
         self._prev_show_help = False
@@ -675,21 +678,28 @@ class Game:
             if self.renderer.use_curses:
                 if key == ord("a"):
                     self.camera.move(-1, 0, self.map.width, self.map.height)
+                    self.pan_pause = 240
                 elif key == ord("d"):
                     self.camera.move(1, 0, self.map.width, self.map.height)
+                    self.pan_pause = 240
                 elif key == ord("w"):
                     self.camera.move(0, -1, self.map.width, self.map.height)
+                    self.pan_pause = 240
                 elif key == ord("s"):
                     self.camera.move(0, 1, self.map.width, self.map.height)
+                    self.pan_pause = 240
                 elif key == ord("+"):
                     self.camera.zoom_in()
                     self.camera.move(0, 0, self.map.width, self.map.height)
+                    self.pan_pause = 240
                 elif key == ord("-"):
                     self.camera.zoom_out()
                     self.camera.move(0, 0, self.map.width, self.map.height)
+                    self.pan_pause = 240
                 elif ord("1") <= key <= ord("9"):
                     self.camera.set_zoom_level(key - ord("1"))
                     self.camera.move(0, 0, self.map.width, self.map.height)
+                    self.pan_pause = 240
                 elif key == ord(" "):
                     self.paused = not self.paused
                 elif key == ord("."):
@@ -707,21 +717,28 @@ class Game:
             else:
                 if key == "a":
                     self.camera.move(-1, 0, self.map.width, self.map.height)
+                    self.pan_pause = 240
                 elif key == "d":
                     self.camera.move(1, 0, self.map.width, self.map.height)
+                    self.pan_pause = 240
                 elif key == "w":
                     self.camera.move(0, -1, self.map.width, self.map.height)
+                    self.pan_pause = 240
                 elif key == "s":
                     self.camera.move(0, 1, self.map.width, self.map.height)
+                    self.pan_pause = 240
                 elif key == "+":
                     self.camera.zoom_in()
                     self.camera.move(0, 0, self.map.width, self.map.height)
+                    self.pan_pause = 240
                 elif key == "-":
                     self.camera.zoom_out()
                     self.camera.move(0, 0, self.map.width, self.map.height)
+                    self.pan_pause = 240
                 elif key in "123456789":
                     self.camera.set_zoom_level(int(key) - 1)
                     self.camera.move(0, 0, self.map.width, self.map.height)
+                    self.pan_pause = 240
                 elif key == " ":
                     self.paused = not self.paused
                 elif key == ".":
@@ -737,7 +754,10 @@ class Game:
                 elif key.lower() == "q":
                     self.running = False
 
-        if not self.paused or self.single_step:
+        if self.pan_pause > 0:
+            self.pan_pause -= 1
+        elif not self.paused or self.single_step:
+            random.shuffle(self.entities)
             for vill in self.entities:
                 vill.update(self)
             prev_day = self.world.day
