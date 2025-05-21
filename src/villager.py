@@ -267,7 +267,10 @@ class Villager:
         )
 
     def update(self, game: "Game") -> None:
-        path_func = find_path_fast if game.tick_count > 25000 else find_path
+        # Always use the hierarchical pathfinder.  The previous behaviour only
+        # enabled the optimised variant after 25k ticks which caused heavy CPU
+        # load once several villagers were active early on.
+        path_func = find_path_fast
         if game.world.is_night:
             self.target_resource = None
             self.target_building = None
