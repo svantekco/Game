@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Tuple
 
 from .constants import Color
@@ -27,6 +27,7 @@ class Building:
     position: Tuple[int, int]
     progress: int = 0
     passable: bool = True
+    residents: List[int] = field(default_factory=list)
 
     def cells(self) -> List[Tuple[int, int]]:
         """World coordinates occupied by this building."""

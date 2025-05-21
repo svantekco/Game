@@ -2,18 +2,15 @@
 from __future__ import annotations
 
 import time
-import random
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional
 
 from .constants import (
-    CARRY_CAPACITY,
     TileType,
     ZOOM_LEVELS,
     TICK_RATE,
     UI_REFRESH_INTERVAL,
-    VILLAGER_ACTION_DELAY,
     MAX_STORAGE,
     SEARCH_LIMIT,
     STATUS_PANEL_Y,
@@ -21,16 +18,18 @@ from .constants import (
     Mood,
     ZoneType,
 )
+
 from .pathfinding import (
     find_nearest_resource,
     find_path,
     find_path_to_building_adjacent,
 )
-from .building import BuildingBlueprint, Building
 
+from .building import BuildingBlueprint, Building
 from .map import GameMap, Zone
 from .renderer import Renderer
 from .camera import Camera
+from .villager import Villager
 
 
 @dataclass
@@ -381,6 +380,7 @@ class Game:
         # Use a higher tick rate so keyboard input is responsive
         self.tick_rate = TICK_RATE
         self.tick_count = 0
+        self.world = World(self.tick_rate)
         self.paused = False
         self.single_step = False
         self.show_help = False
@@ -429,6 +429,22 @@ class Game:
         villager = Villager(id=self.next_entity_id, position=position)
         self.next_entity_id += 1
         self.entities.append(villager)
+        self._assign_home(villager)
+
+    def _assign_home(self, villager: Villager) -> None:
+        houses = [
+            b for b in self.buildings if b.blueprint.name == "House" and b.complete
+        ]
+        for house in houses:
+            if len(house.residents) < 2:
+                house.residents.append(villager.id)
+                villager.home = house.position
+                break
+
+    def _assign_homes(self) -> None:
+        for vill in self.entities:
+            if vill.home is None:
+                self._assign_home(vill)
 
     # --- Usage Tracking ---------------------------------------------
     def record_tile_usage(self, pos: Tuple[int, int]) -> None:
@@ -779,11 +795,13 @@ class Game:
         if not self.paused or self.single_step:
             for vill in self.entities:
                 vill.update(self)
-            self.tick_count += 1
+            self.world.tick()
+            self.tick_count = self.world.tick_count
             self.single_step = False
 
         # Process pending villager spawns
         self._process_spawns()
+        self._assign_homes()
         self._plan_roads()
         self._produce_food()
 
@@ -917,7 +935,12 @@ class Game:
             self._prev_show_actions = self.show_actions
             self._prev_show_buildings = self.show_buildings
         self.renderer.render_game(
-            self.map, self.camera, self.entities, self.buildings, detailed=detailed
+            self.map,
+            self.camera,
+            self.entities,
+            self.buildings,
+            detailed=detailed,
+            is_night=self.world.is_night,
         )
         status = (
             f"Tick:{self.tick_count} "

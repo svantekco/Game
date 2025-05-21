@@ -32,10 +32,9 @@ def test_find_nearest_resource_prefers_roads():
     gmap.get_tile(0, 3).type = TileType.ROCK
     gmap.get_tile(0, 3).resource_amount = 100
 
-    pos, _ = find_nearest_resource(
-        (0, 0), TileType.ROCK, gmap, roads, search_limit=20
-    )
+    pos, _ = find_nearest_resource((0, 0), TileType.ROCK, gmap, roads, search_limit=20)
     assert pos == (0, 3)
+
 
 def test_hierarchical_path_returns_to_goal():
     gmap = GameMap(seed=2)
@@ -47,4 +46,3 @@ def test_hierarchical_path_returns_to_goal():
     for a, b in zip(path, path[1:]):
         dx = abs(a[0] - b[0]) + abs(a[1] - b[1])
         assert dx == 1
-
