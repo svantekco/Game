@@ -252,10 +252,16 @@ class Renderer:
 
     def render_help(self, lines: list[str], start_y: int = 0) -> None:
         """Render help text starting at ``start_y``."""
+        if self.use_curses:
+            _, width = self.term.getmaxyx()
+        else:
+            width = self.term.width
+
         for idx, line in enumerate(lines):
             y = start_y + idx
+            line = line.ljust(width)
             if self.use_curses:
-                self.term.addstr(y, 0, line)
+                self.term.addstr(y, 0, line[:width])
             else:
                 sys.stdout.write(self.term.move_xy(0, y) + line)
         if self.use_curses:
@@ -265,10 +271,16 @@ class Renderer:
 
     def render_overlay(self, lines: list[str], start_y: int = 0) -> None:
         """Render generic overlay lines starting at ``start_y``."""
+        if self.use_curses:
+            _, width = self.term.getmaxyx()
+        else:
+            width = self.term.width
+
         for idx, line in enumerate(lines):
             y = start_y + idx
+            line = line.ljust(width)
             if self.use_curses:
-                self.term.addstr(y, 0, line)
+                self.term.addstr(y, 0, line[:width])
             else:
                 sys.stdout.write(self.term.move_xy(0, y) + line)
         if self.use_curses:

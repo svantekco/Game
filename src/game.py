@@ -11,6 +11,7 @@ from .constants import (
     TileType,
     ZOOM_LEVELS,
     TICK_RATE,
+    UI_REFRESH_INTERVAL,
     VILLAGER_ACTION_DELAY,
     MAX_STORAGE,
     SEARCH_LIMIT,
@@ -304,6 +305,9 @@ class Game:
         self._prev_show_help = False
         self._prev_show_actions = False
         self._prev_show_buildings = False
+
+        # Next tick count when a full UI refresh should occur
+        self._next_ui_refresh = UI_REFRESH_INTERVAL
 
     # --- Resource Helpers ---------------------------------------------
     def adjust_storage(self, resource: str, amount: int) -> None:
@@ -762,6 +766,13 @@ class Game:
     def render(self) -> None:
         """Draw the current game state."""
         detailed = self.camera.zoom_index >= 1
+
+        if self.tick_count >= self._next_ui_refresh:
+            # Force a full redraw periodically to prevent UI artifacts
+            self.renderer.clear()
+            self.renderer._last_glyphs = None
+            self.renderer._last_colors = None
+            self._next_ui_refresh = self.tick_count + UI_REFRESH_INTERVAL
 
         if (
             self.show_help != self._prev_show_help
