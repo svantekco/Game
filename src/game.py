@@ -758,6 +758,7 @@ class Game:
             self.buildings,
             detailed=detailed,
             is_night=self.world.is_night,
+            day_fraction=self.world.day_fraction,
         )
         status = (
             f"Tick:{self.tick_count} "
