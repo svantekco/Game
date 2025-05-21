@@ -21,9 +21,9 @@ class World:
 
     @property
     def is_night(self) -> bool:
-        """Return True if time is between 00:00 and 03:00."""
+        """Return True if time is between 23:00 and 06:00."""
         hour = int(self.day_fraction * 24)
-        return hour < 3
+        return hour >= 23 or hour < 6
 
     @property
     def time_of_day(self) -> str:

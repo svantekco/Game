@@ -89,6 +89,10 @@ class Villager:
             return 2.0
         return 1.0
 
+    def _time_of_day_delay_factor(self, game: "Game") -> float:
+        """Return slowdown factor for night time."""
+        return 1.5 if game.world.is_night else 1.0
+
     def _action_delay(self, game: "Game", base_delay: int) -> int:
         delay = self._apply_tool_bonus(game, base_delay)
         delay = int(
@@ -96,6 +100,7 @@ class Villager:
             * self._personality_delay_factor()
             * self._mood_delay_factor()
             * self._life_stage_delay_factor()
+            * self._time_of_day_delay_factor(game)
         )
         return max(0, delay)
 
@@ -249,8 +254,6 @@ class Villager:
                     return f"Heading to build {self.target_building.blueprint.name}"
                 return "Stuck: no path to site"
             return "Searching for build"
-        if self.state == "sleeping":
-            return "Sleeping"
         return self.state
 
     # ---------------------------------------------------------------
@@ -283,25 +286,6 @@ class Villager:
         # enabled the optimised variant after 25k ticks which caused heavy CPU
         # load once several villagers were active early on.
         path_func = find_path_fast
-        if game.world.is_night:
-            self.target_resource = None
-            self.target_building = None
-            if self.home and self.position != self.home:
-                if not self.target_path:
-                    path = path_func(
-                        self.position,
-                        self.home,
-                        game.map,
-                        game.buildings,
-                        search_limit=game.get_search_limit(),
-                    )
-                    self.target_path = path[1:]
-                self._move_step(game)
-            else:
-                self.state = "sleeping"
-                self.asleep = True
-                self.target_path = []
-            return
         if self.asleep:
             self.asleep = False
             self.state = "idle"
