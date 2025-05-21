@@ -207,18 +207,94 @@ def find_path_fast(
     return find_path(start, goal, gmap, buildings, search_limit=search_limit)
 
 
-def find_nearest_resource(
+
+def _map_cache(gmap: GameMap) -> Dict[Tuple[TileType, int, int, int], List[List[Tuple[int, int]]]]:
+    """Return the cluster cache dictionary attached to ``gmap``."""
+
+    cache = getattr(gmap, "_cluster_cache", None)
+    if cache is None:
+        cache = {}
+        setattr(gmap, "_cluster_cache", cache)
+    return cache
+
+
+def _cluster_key(
+    gmap: GameMap, resource: TileType, center: Tuple[int, int], radius: int
+) -> Tuple[TileType, int, int, int]:
+    """Return a stable key for a region around ``center``."""
+
+    return (
+        resource,
+        center[0] // (radius * 2),
+        center[1] // (radius * 2),
+        radius,
+    )
+
+
+def _compute_clusters(
+    gmap: GameMap, resource: TileType, center: Tuple[int, int], radius: int
+) -> List[List[Tuple[int, int]]]:
+    """Return clusters of ``resource`` tiles within ``radius`` of ``center``."""
+
+    min_x = max(0, center[0] - radius)
+    max_x = min(gmap.width - 1, center[0] + radius)
+    min_y = max(0, center[1] - radius)
+    max_y = min(gmap.height - 1, center[1] + radius)
+
+    visited: Set[Tuple[int, int]] = set()
+    clusters: List[List[Tuple[int, int]]] = []
+
+    for x in range(min_x, max_x + 1):
+        for y in range(min_y, max_y + 1):
+            pos = (x, y)
+            if pos in visited:
+                continue
+            tile = gmap.get_tile(x, y)
+            if tile.type is not resource or tile.resource_amount <= 0:
+                continue
+            cluster: List[Tuple[int, int]] = []
+            stack = [pos]
+            visited.add(pos)
+            while stack:
+                cx, cy = stack.pop()
+                cluster.append((cx, cy))
+                for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+                    nx, ny = cx + dx, cy + dy
+                    npos = (nx, ny)
+                    if (
+                        min_x <= nx <= max_x
+                        and min_y <= ny <= max_y
+                        and npos not in visited
+                    ):
+                        t = gmap.get_tile(nx, ny)
+                        if t.type is resource and t.resource_amount > 0:
+                            visited.add(npos)
+                            stack.append(npos)
+            clusters.append(cluster)
+
+    return clusters
+
+
+def _get_clusters(
+    gmap: GameMap, resource: TileType, center: Tuple[int, int], radius: int
+) -> List[List[Tuple[int, int]]]:
+    """Retrieve cached clusters near ``center`` or compute them."""
+
+    cache = _map_cache(gmap)
+    key = _cluster_key(gmap, resource, center, radius)
+    if key not in cache:
+        cache[key] = _compute_clusters(gmap, resource, center, radius)
+    return cache[key]
+
+
+def _nearest_resource_bfs(
     start: Tuple[int, int],
     resource_type: TileType,
     gmap: GameMap,
-    buildings: Iterable[object] | None = None,
-    *,
-    search_limit: int = SEARCH_LIMIT,
+    buildings: Iterable[object],
+    search_limit: int,
 ) -> Tuple[Optional[Tuple[int, int]], List[Tuple[int, int]]]:
-    """Find the closest tile of the given resource type and a path to it."""
-
-    if buildings is None:
-        buildings = []
+    """Fallback BFS search used when clustering fails."""
 
     from collections import deque
 
@@ -251,6 +327,45 @@ def find_nearest_resource(
             q.append(n)
 
     return None, []
+
+
+def find_nearest_resource(
+    start: Tuple[int, int],
+    resource_type: TileType,
+    gmap: GameMap,
+    buildings: Iterable[object] | None = None,
+    *,
+    search_limit: int = SEARCH_LIMIT,
+    cluster_radius: int = 25,
+) -> Tuple[Optional[Tuple[int, int]], List[Tuple[int, int]]]:
+    """Find the closest tile of ``resource_type`` using cached clusters."""
+
+    if buildings is None:
+        buildings = []
+
+    clusters = _get_clusters(gmap, resource_type, start, cluster_radius)
+
+    best_path: List[Tuple[int, int]] = []
+    best_target: Optional[Tuple[int, int]] = None
+
+    for cluster in clusters:
+        # pick the closest tile in this cluster
+        candidate = min(
+            cluster,
+            key=lambda p: abs(p[0] - start[0]) + abs(p[1] - start[1]),
+        )
+        path = find_path(start, candidate, gmap, buildings, search_limit=search_limit)
+        if path and (not best_path or len(path) < len(best_path)):
+            best_path = path
+            best_target = candidate
+
+    if best_target is not None:
+        return best_target, best_path
+
+    # Fallback to BFS if no cluster produced a viable path
+    return _nearest_resource_bfs(
+        start, resource_type, gmap, buildings, search_limit
+    )
 
 
 def find_path_hierarchical(
