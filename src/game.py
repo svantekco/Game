@@ -41,11 +41,11 @@ class Job:
 class Game:
     """Owns game state and runs the main loop."""
 
-    def __init__(self, seed: int | None = None) -> None:
+    def __init__(self, seed: int | None = None, preview: bool = False) -> None:
         random.seed(seed)
         self.map = GameMap(seed=seed)
-        for row in self.map.terrain.preview():
-            print(row)
+        if preview:
+            self.map.terrain.display_preview()
         self.entities: List[Villager] = []
         self.buildings: List[Building] = []
         self.build_queue: List[Building] = []
