@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional
 
 from .constants import (
@@ -27,6 +27,7 @@ from .map import GameMap
 from .renderer import Renderer
 from .camera import Camera
 from .villager import Villager
+
 
 @dataclass
 class Villager:
@@ -77,7 +78,9 @@ class Villager:
 
     def _action_delay(self, game: "Game", base_delay: int) -> int:
         delay = self._apply_tool_bonus(game, base_delay)
-        delay = int(delay * self._personality_delay_factor() * self._mood_delay_factor())
+        delay = int(
+            delay * self._personality_delay_factor() * self._mood_delay_factor()
+        )
         return max(1, delay)
 
     def adjust_mood(self, delta: int) -> None:
@@ -127,9 +130,7 @@ class Villager:
                 if self.position == self.target_resource:
                     return f"Gathering {self.resource_type.name.lower()}"
                 if self.target_path:
-                    return (
-                        f"Heading to {self.resource_type.name.lower()} at {self.target_resource}"
-                    )
+                    return f"Heading to {self.resource_type.name.lower()} at {self.target_resource}"
                 return "Stuck: no path to resource"
             return "Searching for resource"
         if self.state == "deliver":
@@ -143,9 +144,7 @@ class Villager:
                 if self._adjacent_to_building(self.target_building):
                     return f"Building {self.target_building.blueprint.name}"
                 if self.target_path:
-                    return (
-                        f"Heading to build {self.target_building.blueprint.name}"
-                    )
+                    return f"Heading to build {self.target_building.blueprint.name}"
                 return "Stuck: no path to site"
             return "Searching for build"
         return self.state
@@ -272,7 +271,7 @@ class Villager:
                 if self.target_building.blueprint.name == "House":
                     game.schedule_spawn(self.target_building.position)
                 self.state = "idle"
-            
+
     @property
     def x(self) -> int:
         return self.position[0]
