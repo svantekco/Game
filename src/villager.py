@@ -290,6 +290,9 @@ class Villager:
                     self.target_building.passable = False
                     if self.target_building in game.build_queue:
                         game.build_queue.remove(self.target_building)
+                    # Remove any queued build jobs for this now-complete building
+                    game.jobs = [j for j in game.jobs if j.payload is not self.target_building]
+                    self.target_building.builder_id = None
                     if self.target_building.blueprint.name == "House":
                         game.schedule_spawn(self.target_building.position)
                 else:
