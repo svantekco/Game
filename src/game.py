@@ -135,6 +135,7 @@ class Game:
         from collections import defaultdict
 
         self.tile_usage: Dict[Tuple[int, int], int] = defaultdict(int)
+        self.reservations: Dict[Tuple[int, int], Tuple[int, TileType]] = {}
 
         self.renderer = Renderer()
         self.camera = Camera()
@@ -277,6 +278,18 @@ class Game:
     def record_tile_usage(self, pos: Tuple[int, int]) -> None:
         """Increment usage counter for ``pos``."""
         self.tile_usage[pos] += 1
+
+    # --- Reservation Helpers --------------------------------------
+    def reserve_resource(
+        self, pos: Tuple[int, int], villager_id: int, rtype: TileType
+    ) -> bool:
+        if pos in self.reservations:
+            return False
+        self.reservations[pos] = (villager_id, rtype)
+        return True
+
+    def release_resource(self, pos: Tuple[int, int]) -> None:
+        self.reservations.pop(pos, None)
 
     def nearest_storage(self, pos: Tuple[int, int]) -> Tuple[int, int]:
         """Return the closest storage location to ``pos``."""
@@ -916,6 +929,7 @@ class Game:
             detailed=detailed,
             is_night=self.world.is_night,
             day_fraction=self.world.day_fraction,
+            reserved=set(self.reservations.keys()),
         )
         status = (
             f"Tick:{self.tick_count} "
