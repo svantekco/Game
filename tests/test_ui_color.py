@@ -27,4 +27,3 @@ def test_ui_fixed_colour(monkeypatch):
     renderer.draw_grid([["X"]], [[Color.UI]])
 
     assert called["rgb"] == UI_COLOR_RGB
-

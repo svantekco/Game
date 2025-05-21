@@ -105,3 +105,13 @@ class LifeStage(Enum):
     ADULT = auto()
     ELDER = auto()
     RETIRED = auto()
+
+
+class Role(Enum):
+    """Specialised job roles for villagers."""
+
+    BUILDER = auto()
+    WOODCUTTER = auto()
+    MINER = auto()
+    ROAD_PLANNER = auto()
+    LABOURER = auto()

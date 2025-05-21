@@ -17,6 +17,7 @@ from .constants import (
     STATUS_PANEL_Y,
     ZoneType,
     LifeStage,
+    Role,
 )
 
 
@@ -215,6 +216,38 @@ class Game:
             if vill.home is None:
                 self._assign_home(vill)
 
+    def _update_roles(self) -> None:
+        """Ensure villagers are distributed across roles based on needs."""
+        if len(self.entities) < 5:
+            return
+
+        from collections import defaultdict
+
+        counts: dict[Role, list[Villager]] = defaultdict(list)
+        for v in self.entities:
+            counts[v.role].append(v)
+
+        mandatory = [Role.BUILDER, Role.WOODCUTTER, Role.MINER, Role.ROAD_PLANNER]
+        unassigned = [v for v in self.entities if v.role not in mandatory]
+
+        for role in mandatory:
+            if not counts.get(role):
+                if unassigned:
+                    vill = unassigned.pop()
+                else:
+                    # Steal from the largest group
+                    largest = max(mandatory, key=lambda r: len(counts.get(r, [])))
+                    vill = counts[largest].pop()
+                vill.role = role
+                counts[role].append(vill)
+
+        wood_need = max(0, self.wood_threshold - self.storage.get("wood", 0))
+        stone_need = max(0, self.stone_threshold - self.storage.get("stone", 0))
+        preferred = Role.WOODCUTTER if wood_need >= stone_need else Role.MINER
+
+        for v in unassigned:
+            v.role = preferred
+
     # --- Usage Tracking ---------------------------------------------
     def record_tile_usage(self, pos: Tuple[int, int]) -> None:
         """Increment usage counter for ``pos``."""
@@ -227,12 +260,15 @@ class Game:
             key=lambda s: abs(s[0] - pos[0]) + abs(s[1] - pos[1]),
         )
 
-    def _assign_builder(self, building: Building) -> None:
-        """Assign the nearest villager to construct ``building``."""
+    def _assign_builder(self, building: Building, role: Role = Role.BUILDER) -> None:
+        """Assign the nearest villager with ``role`` to construct ``building``."""
         if not self.entities:
             return
+        candidates = [v for v in self.entities if v.role is role]
+        if not candidates:
+            candidates = self.entities
         builder = min(
-            self.entities,
+            candidates,
             key=lambda v: abs(v.x - building.position[0])
             + abs(v.y - building.position[1]),
         )
@@ -262,7 +298,7 @@ class Game:
             self.storage["stone"] -= road_bp.stone
             self.build_queue.append(building)
             self.buildings.append(building)
-            self._assign_builder(building)
+            self._assign_builder(building, Role.ROAD_PLANNER)
         self.tile_usage.clear()
 
     def _produce_food(self) -> None:
@@ -473,8 +509,35 @@ class Game:
     def dispatch_job(self, villager: Villager) -> Optional[Job]:
         if self.jobs:
             for i, job in enumerate(self.jobs):
-                if job.target_villager is None or job.target_villager == villager.id:
+                if (
+                    job.target_villager is not None
+                    and job.target_villager == villager.id
+                ):
                     return self.jobs.pop(i)
+            for i, job in enumerate(self.jobs):
+                if job.target_villager is None:
+                    if (
+                        villager.role is Role.BUILDER
+                        and job.type == "build"
+                        and job.payload.blueprint.name != "Road"
+                    ):
+                        return self.jobs.pop(i)
+                    if (
+                        villager.role is Role.ROAD_PLANNER
+                        and job.type == "build"
+                        and job.payload.blueprint.name == "Road"
+                    ):
+                        return self.jobs.pop(i)
+                    if villager.role is Role.LABOURER:
+                        return self.jobs.pop(i)
+
+        # Role specific default tasks
+        if villager.role is Role.WOODCUTTER:
+            return Job("gather", TileType.TREE)
+        if villager.role is Role.MINER:
+            return Job("gather", TileType.ROCK)
+        if villager.role in (Role.BUILDER, Role.ROAD_PLANNER):
+            return None
 
         # Ensure we always have enough resources to build new storage
         storage_bp = self.blueprints["Storage"]
@@ -572,7 +635,7 @@ class Game:
                         building = Building(bp, pos)
                         self.build_queue.append(building)
                         self.buildings.append(building)
-                        self._assign_builder(building)
+                        self._assign_builder(building, Role.BUILDER)
                         return
             for b in built:
                 if b.level < level and self._can_upgrade(b):
@@ -622,7 +685,7 @@ class Game:
                 building = Building(house_bp, pos)
                 self.build_queue.append(building)
                 self.buildings.append(building)
-                self._assign_builder(building)
+                self._assign_builder(building, Role.BUILDER)
 
     # --- Game Loop -----------------------------------------------------
     def run(self, show_fps: bool = False) -> None:
@@ -770,6 +833,7 @@ class Game:
         # Process pending villager spawns
         self._process_spawns()
         self._assign_homes()
+        self._update_roles()
         self._plan_roads()
         self._produce_food()
         self._auto_upgrade()
@@ -818,6 +882,15 @@ class Game:
             f"Food:{self.storage['food']} "
             f"Cap:{self.storage_capacity} "
             f"Pop:{len(self.entities)}"
+        )
+        counts: Dict[Role, int] = defaultdict(int)
+        for v in self.entities:
+            counts[v.role] += 1
+        status += (
+            f" B:{counts[Role.BUILDER]}"
+            f" W:{counts[Role.WOODCUTTER]}"
+            f" M:{counts[Role.MINER]}"
+            f" R:{counts[Role.ROAD_PLANNER]}"
         )
         if self.show_fps:
             status += f" FPS:{self.current_fps:.1f} ({self.last_tick_ms:.1f}ms)"

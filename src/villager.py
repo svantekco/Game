@@ -15,6 +15,7 @@ from .constants import (
     TileType,
     VILLAGER_ACTION_DELAY,
     LifeStage,
+    Role,
 )
 from .pathfinding import (
     find_nearest_resource,
@@ -47,6 +48,7 @@ class Villager:
     asleep: bool = False
     age: int = 18
     life_stage: LifeStage = LifeStage.ADULT
+    role: Role = Role.LABOURER
 
     # ---------------------------------------------------------------
     def is_full(self) -> bool:
