@@ -4,6 +4,7 @@ import sys
 from typing import TYPE_CHECKING
 
 from .constants import Color, TileType, STATUS_PANEL_Y, Mood, ZoneType
+from .filters import apply_lighting, day_night_filter, zone_filter
 
 if TYPE_CHECKING:  # pragma: no cover - imports for type hints only
     from .map import GameMap
@@ -55,7 +56,7 @@ class Renderer:
         # positions. Each element mirrors the glyph/color grid passed to
         # ``draw_grid``.
         self._last_glyphs: list[list[str]] | None = None
-        self._last_colors: list[list[Color | None]] | None = None
+        self._last_colors: list[list[object | None]] | None = None
         self._last_size: tuple[int, int] = (0, 0)
 
     def clear(self) -> None:
@@ -70,7 +71,7 @@ class Renderer:
         self._last_colors = None
 
     def draw_grid(
-        self, glyphs: list[list[str]], colors: list[list[Color | None]] | None = None
+        self, glyphs: list[list[str]], colors: list[list[object | None]] | None = None
     ) -> None:
         if colors is None:
             colors = [[None for _ in row] for row in glyphs]
@@ -107,14 +108,19 @@ class Renderer:
                     ):
                         color = colors[y][x]
                         move = self.term.move_xy(x, y)
-                        if color:
+                        if color is None:
+                            out.append(move + ch)
+                        elif isinstance(color, tuple):
+                            if hasattr(self.term, "color_rgb"):
+                                out.append(move + self.term.color_rgb(*color) + ch)
+                            else:
+                                out.append(move + ch)
+                        else:
                             attr = self.COLOR_ATTRS.get(color)
                             if attr and hasattr(self.term, attr):
                                 out.append(move + getattr(self.term, attr)(ch))
                             else:
                                 out.append(move + ch)
-                        else:
-                            out.append(move + ch)
             sys.stdout.write("".join(out))
             sys.stdout.flush()
 
@@ -123,39 +129,28 @@ class Renderer:
         self._last_colors = [row.copy() for row in colors]
 
     # ------------------------------------------------------------------
-    def _tile_to_render(
-        self, tile: TileType, detailed: bool, zone: ZoneType | None = None
-    ) -> tuple[str, Color]:
-        """Return a glyph and color for the given tile type and zone."""
+    def _tile_to_render(self, tile: TileType, detailed: bool) -> str:
+        """Return a glyph for the given tile type."""
         if detailed:
             if tile is TileType.GRASS:
-                glyph, color = ".", Color.GRASS
+                glyph = "."
             elif tile is TileType.TREE:
-                glyph, color = "t", Color.TREE
+                glyph = "t"
             elif tile is TileType.ROCK:
-                glyph, color = "^", Color.ROCK
+                glyph = "^"
             else:
-                glyph, color = "~", Color.WATER
+                glyph = "~"
         else:
             if tile is TileType.GRASS:
-                glyph, color = "G", Color.GRASS
+                glyph = "G"
             elif tile is TileType.TREE:
-                glyph, color = "T", Color.TREE
+                glyph = "T"
             elif tile is TileType.ROCK:
-                glyph, color = "R", Color.ROCK
+                glyph = "R"
             else:
-                glyph, color = "W", Color.WATER
+                glyph = "W"
 
-        # Apply zone overlay colour regardless of base tile type so
-        # zones remain visible on trees, rocks and water tiles.
-        if zone is ZoneType.HOUSING:
-            color = Color.HOUSING_ZONE
-        elif zone is ZoneType.WORK:
-            color = Color.WORK_ZONE
-        elif zone is ZoneType.MARKET:
-            color = Color.MARKET_ZONE
-
-        return glyph, color
+        return glyph
 
     def render_game(
         self,
@@ -166,22 +161,28 @@ class Renderer:
         detailed: bool = False,
         *,
         is_night: bool = False,
+        day_fraction: float = 0.0,
+        filters: list | None = None,
     ) -> None:
         """Render the visible portion of the map with villagers and buildings."""
 
         if buildings is None:
             buildings = []
+        if filters is None:
+            filters = [zone_filter, day_night_filter]
+
         glyph_grid: list[list[str]] = []
-        color_grid: list[list[Color]] = []
+        color_grid: list[list[object]] = []
 
         for ty in range(camera.visible_tiles_y):
             glyph_row: list[str] = []
-            color_row: list[Color] = []
+            color_row: list[object] = []
             for tx in range(camera.visible_tiles_x):
                 wx = camera.x + tx
                 wy = camera.y + ty
                 tile = gmap.get_tile(wx, wy)
-                glyph, color = self._tile_to_render(tile.type, detailed, tile.zone)
+                glyph = self._tile_to_render(tile.type, detailed)
+                color = apply_lighting(tile, day_fraction, filters)
                 if is_night:
                     glyph = glyph.lower()
 

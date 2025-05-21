@@ -26,3 +26,8 @@ class World:
         hours = int(day_fraction * 24)
         minutes = int((day_fraction * 24 - hours) * 60)
         return f"{hours:02d}:{minutes:02d}"
+
+    @property
+    def day_fraction(self) -> float:
+        """Current time of day as a value in ``[0, 1]``."""
+        return (self.tick_count % self.day_length) / self.day_length
