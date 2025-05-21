@@ -19,6 +19,7 @@ from .constants import (
 from .pathfinding import (
     find_nearest_resource,
     find_path,
+    find_path_fast,
     find_path_to_building_adjacent,
 )
 
@@ -171,16 +172,19 @@ class Villager:
                     f"Villager {self.id} became {self.life_stage.name.lower()}"
                 )
         self.carrying_capacity = (
-            CARRY_CAPACITY if self.life_stage in (LifeStage.ADULT, LifeStage.ELDER) else CARRY_CAPACITY // 2
+            CARRY_CAPACITY
+            if self.life_stage in (LifeStage.ADULT, LifeStage.ELDER)
+            else CARRY_CAPACITY // 2
         )
 
     def update(self, game: "Game") -> None:
+        path_func = find_path_fast if game.tick_count > 25000 else find_path
         if game.world.is_night:
             self.target_resource = None
             self.target_building = None
             if self.home and self.position != self.home:
                 if not self.target_path:
-                    path = find_path(
+                    path = path_func(
                         self.position,
                         self.home,
                         game.map,
@@ -276,7 +280,7 @@ class Villager:
         if self.state == "deliver":
             if not self.target_path:
                 self.target_storage = game.nearest_storage(self.position)
-                path = find_path(
+                path = path_func(
                     self.position,
                     self.target_storage,
                     game.map,
@@ -310,7 +314,9 @@ class Villager:
                     if self.target_building in game.build_queue:
                         game.build_queue.remove(self.target_building)
                     # Remove any queued build jobs for this now-complete building
-                    game.jobs = [j for j in game.jobs if j.payload is not self.target_building]
+                    game.jobs = [
+                        j for j in game.jobs if j.payload is not self.target_building
+                    ]
                     self.target_building.builder_id = None
                     if self.target_building.blueprint.name == "House":
                         game.schedule_spawn(self.target_building.position)
