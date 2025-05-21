@@ -3,6 +3,7 @@
 ## About the Game
 
 **VillageSim** is a real‑time, terminal‑based medieval village simulator written entirely in Python. A procedurally generated **1 000 × 1 000‑tile** world—lush grasslands, dense forests, rugged stone outcrops, and meandering rivers—comes alive in nothing but Unicode glyphs.  From the first swing of an axe to the rise of a bustling hamlet, every moment is driven by an agent‑based simulation that plays out before your eyes at **around 60 ticks per second by default**.
+The day/night cycle now stretches to roughly **24 seconds per day**, four times longer than before, giving you more time to watch villagers go about their business.
 
 Rather than micromanaging individual settlers, you watch emergent stories unfold.  Each villager is an autonomous entity that can plan paths, gather resources, construct buildings, and deliver supplies back to storage, all while navigating a living landscape that reacts to their actions.  A simple finite‑state machine turns a lone labourer into a self‑sufficient workforce that knows when to chop, haul, build, and rest.
 
