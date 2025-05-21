@@ -19,7 +19,7 @@ VIEWPORT_WIDTH = 80
 # Height of the UI panel at the bottom of the screen
 UI_PANEL_HEIGHT = 10
 # Height of the game viewport (excluding UI panel)
-VIEWPORT_HEIGHT = 24 - UI_PANEL_HEIGHT
+VIEWPORT_HEIGHT = 42 - UI_PANEL_HEIGHT
 # Y coordinate where the status line is rendered
 STATUS_PANEL_Y = VIEWPORT_HEIGHT
 # Discrete zoom levels: 1 cell per tile, 2 cells per tile, etc.
