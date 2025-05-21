@@ -8,6 +8,25 @@ from .map import GameMap
 from .constants import TileType, SEARCH_LIMIT
 
 
+@dataclass
+class _ScaledMap:
+    """Simple wrapper that presents a scaled view of a ``GameMap``."""
+
+    base: GameMap
+    factor: int
+
+    @property
+    def width(self) -> int:
+        return self.base.width // self.factor
+
+    @property
+    def height(self) -> int:
+        return self.base.height // self.factor
+
+    def get_tile(self, x: int, y: int):
+        return self.base.get_tile(x * self.factor, y * self.factor)
+
+
 @dataclass(order=True)
 class _PQNode:
     priority: float
@@ -174,3 +193,59 @@ def find_nearest_resource(
                 counter += 1
 
     return None, []
+
+
+def find_path_hierarchical(
+    start: Tuple[int, int],
+    goal: Tuple[int, int],
+    gmap: GameMap,
+    buildings: Iterable[object] | None = None,
+    *,
+    coarse_distance: int = 50,
+    step: int = 4,
+) -> List[Tuple[int, int]]:
+    """Hierarchical A* pathfinding with a coarse pre-pass.
+
+    For long distance travel the search space can explode.  This helper first
+    plans a route on a down-scaled version of the map to get close to the
+    target before running the normal ``find_path`` for the fine grained steps.
+    """
+
+    if buildings is None:
+        buildings = []
+
+    dx = abs(goal[0] - start[0])
+    dy = abs(goal[1] - start[1])
+    if max(dx, dy) <= coarse_distance or step <= 1:
+        return find_path(start, goal, gmap, buildings)
+
+    scaled = _ScaledMap(gmap, step)
+    coarse_start = (start[0] // step, start[1] // step)
+    coarse_goal = (goal[0] // step, goal[1] // step)
+
+    coarse_path = find_path(coarse_start, coarse_goal, scaled, buildings)
+    if not coarse_path:
+        return []
+
+    path: List[Tuple[int, int]] = []
+    current = start
+    for cp in coarse_path[1:]:
+        target = (cp[0] * step, cp[1] * step)
+        segment = find_path(current, target, gmap, buildings)
+        if not segment:
+            return []
+        if path and segment[0] == path[-1]:
+            path.extend(segment[1:])
+        else:
+            path.extend(segment)
+        current = target
+
+    final_segment = find_path(current, goal, gmap, buildings)
+    if not final_segment:
+        return []
+    if path and final_segment[0] == path[-1]:
+        path.extend(final_segment[1:])
+    else:
+        path.extend(final_segment)
+
+    return path

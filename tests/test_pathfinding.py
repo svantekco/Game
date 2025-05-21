@@ -1,5 +1,5 @@
 from src.map import GameMap
-from src.pathfinding import find_path, find_nearest_resource
+from src.pathfinding import find_path, find_nearest_resource, find_path_hierarchical
 from src.constants import TileType
 from src.blueprints import BLUEPRINTS
 from src.building import Building
@@ -36,3 +36,15 @@ def test_find_nearest_resource_prefers_roads():
         (0, 0), TileType.ROCK, gmap, roads, search_limit=20
     )
     assert pos == (0, 3)
+
+def test_hierarchical_path_returns_to_goal():
+    gmap = GameMap(seed=2)
+    start = (0, 0)
+    goal = (70, 0)
+    path = find_path_hierarchical(start, goal, gmap, [], coarse_distance=20, step=4)
+    assert path[0] == start and path[-1] == goal
+    # ensure path uses only adjacent steps
+    for a, b in zip(path, path[1:]):
+        dx = abs(a[0] - b[0]) + abs(a[1] - b[1])
+        assert dx == 1
+
