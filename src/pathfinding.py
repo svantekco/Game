@@ -249,3 +249,36 @@ def find_path_hierarchical(
         path.extend(final_segment)
 
     return path
+
+
+def find_path_to_building_adjacent(
+    start: Tuple[int, int],
+    building: object,
+    gmap: GameMap,
+    buildings: Iterable[object] | None = None,
+) -> List[Tuple[int, int]]:
+    """Return a path to a passable tile adjacent to ``building``."""
+
+    if buildings is None:
+        buildings = []
+
+    if hasattr(building, "cells"):
+        cells = building.cells()
+    else:
+        cells = [getattr(building, "position", (0, 0))]
+
+    candidates: Set[Tuple[int, int]] = set()
+    for bx, by in cells:
+        for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+            cx, cy = bx + dx, by + dy
+            if 0 <= cx < gmap.width and 0 <= cy < gmap.height:
+                if _is_passable((cx, cy), gmap, buildings):
+                    candidates.add((cx, cy))
+
+    best: List[Tuple[int, int]] = []
+    for cand in candidates:
+        path = find_path(start, cand, gmap, buildings)
+        if path and (not best or len(path) < len(best)):
+            best = path
+
+    return best
