@@ -185,6 +185,7 @@ class Renderer:
         is_night: bool = False,
         day_fraction: float = 0.0,
         filters: list | None = None,
+        reserved: set[tuple[int, int]] | None = None,
     ) -> None:
         """Render the visible portion of the map with villagers and buildings."""
 
@@ -192,6 +193,8 @@ class Renderer:
             buildings = []
         if filters is None:
             filters = [zone_filter, day_night_filter]
+        if reserved is None:
+            reserved = set()
 
         start_total = time.perf_counter()
         lighting_time = 0.0
@@ -215,6 +218,8 @@ class Renderer:
                 glyph = self._tile_to_render(tile.type, detailed)
                 t0 = time.perf_counter()
                 color = apply_lighting(tile, day_fraction, filters)
+                if (wx, wy) in reserved:
+                    color = tuple(min(255, int(c * 1.3)) for c in color)
                 lighting_time += time.perf_counter() - t0
                 if is_night:
                     glyph = glyph.lower()

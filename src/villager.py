@@ -52,6 +52,7 @@ class Villager:
     age: int = 18
     life_stage: LifeStage = LifeStage.ADULT
     role: Role = Role.LABOURER
+    reservations: Dict[TileType, Tuple[int, int] | None] = field(default_factory=dict)
 
     # ---------------------------------------------------------------
     def is_full(self) -> bool:
@@ -141,58 +142,22 @@ class Villager:
         return False
 
     def _avoid_nearby_villagers(self, game: "Game") -> bool:
-        """Move away if another villager is too close."""
-
-        for v in game.entities:
-            if v is self:
-                continue
-            if max(abs(v.x - self.x), abs(v.y - self.y)) < 2:
-                if self._move_away_from(v.position, game):
-                    return True
+        """Disabled: previously stepped away from nearby villagers."""
         return False
 
     def _move_step(self, game: "Game") -> bool:
         if not self.target_path:
             return False
         next_pos = self.target_path[0]
-        # Avoid collisions with other villagers and maintain spacing
+        # Allow passing other villagers, only block if another villager is idle on the tile
         for v in game.entities:
             if v is self:
                 continue
-            # Don't move if the target tile is occupied
             if v.position == next_pos:
-                # If we're trying to swap positions, larger id reroutes
                 if v.target_path and v.target_path[0] == self.position:
-                    if self.id > v.id:
-                        self.target_path = []
-                    else:
-                        v.target_path = []
-                logger.debug(
-                    "Villager %s blocked by other villager at %s", self.id, next_pos
-                )
+                    # swap positions, other villager moves later
+                    break
                 return False
-            # Maintain a 2 tile buffer
-            if (
-                max(abs(v.position[0] - next_pos[0]), abs(v.position[1] - next_pos[1]))
-                < 2
-            ):
-                logger.debug(
-                    "Villager %s too close to villager at %s", self.id, v.position
-                )
-                return False
-            # If another villager plans to move into our target tile, resolve based on id
-            if v.target_path and v.target_path[0] == next_pos:
-                if self.id > v.id:
-                    self.target_path = []
-                    logger.debug(
-                        "Villager %s yielding target tile %s to %s",
-                        self.id,
-                        next_pos,
-                        v.id,
-                    )
-                    return False
-                else:
-                    v.target_path = []
         tile = game.map.get_tile(*next_pos)
         if not tile.passable:
             self.target_path = []
@@ -366,12 +331,30 @@ class Villager:
                 resource_type = (
                     job.payload if isinstance(job.payload, TileType) else TileType.TREE
                 )
+                reserved = self.reservations.get(resource_type)
+                if reserved:
+                    tile = game.map.get_tile(*reserved)
+                    if tile.resource_amount <= 0:
+                        game.release_resource(reserved)
+                        self.reservations.pop(resource_type, None)
+                        reserved = None
+                if reserved:
+                    path = path_func(
+                        self.position,
+                        reserved,
+                        game.map,
+                        game.buildings,
+                        search_limit=game.get_search_limit(),
+                    )
+                    self.resource_type = resource_type
+                    self.target_resource = reserved
+                    self.target_path = path[1:]
+                    self.state = "gather"
+                    return
                 avoid = [
-                    v.target_resource
-                    for v in game.entities
-                    if v is not self
-                    and v.resource_type == resource_type
-                    and v.target_resource is not None
+                    pos
+                    for pos, (_, rt) in game.reservations.items()
+                    if rt == resource_type
                 ]
                 pos, path = find_nearest_resource(
                     self.position,
@@ -381,11 +364,12 @@ class Villager:
                     search_limit=game.get_search_limit(),
                     avoid=avoid,
                 )
-                if pos is None:
+                if pos is None or not game.reserve_resource(pos, self.id, resource_type):
                     self._wander(game)
                     return
                 self.resource_type = resource_type
                 self.target_resource = pos
+                self.reservations[resource_type] = pos
                 self.target_path = path[1:]
                 self.state = "gather"
                 return
@@ -426,6 +410,9 @@ class Villager:
                         self.id,
                         self.target_resource,
                     )
+                    if self.target_resource:
+                        game.release_resource(self.target_resource)
+                        self.reservations.pop(self.resource_type, None)
                     self.target_resource = None
                     self.state = "idle"
                     self._wander(game)
@@ -449,7 +436,16 @@ class Villager:
                     self.inventory["wood"] += gained
                 self.adjust_mood(1)
                 self.cooldown = self._action_delay(game, VILLAGER_ACTION_DELAY)
-                if self.is_full() or tile.resource_amount == 0:
+                if tile.resource_amount == 0:
+                    game.release_resource(self.target_resource)
+                    self.reservations.pop(self.resource_type, None)
+                    self.target_resource = None
+                    if sum(self.inventory.values()) > 0:
+                        self.state = "deliver"
+                    else:
+                        self.state = "idle"
+                    self.target_path = []
+                elif self.is_full():
                     self.state = "deliver"
                     self.target_path = []
             return
@@ -462,8 +458,27 @@ class Villager:
                         self.inventory[res] = 0
                 self.adjust_mood(1)
                 self.cooldown = self._action_delay(game, VILLAGER_ACTION_DELAY)
-                self.state = "idle"
-                self.target_path = []
+                if (
+                    self.target_resource
+                    and game.map.get_tile(*self.target_resource).resource_amount > 0
+                ):
+                    path = path_func(
+                        self.position,
+                        self.target_resource,
+                        game.map,
+                        game.buildings,
+                        search_limit=game.get_search_limit(),
+                    )
+                    self.target_path = path[1:]
+                    self.state = "gather"
+                else:
+                    if self.target_resource:
+                        game.release_resource(self.target_resource)
+                        self.reservations.pop(self.resource_type, None)
+                    self.target_resource = None
+                    self.resource_type = None
+                    self.state = "idle"
+                    self.target_path = []
                 return
 
             if not self.target_path:
@@ -482,6 +497,11 @@ class Villager:
                         self.id,
                         self.target_storage,
                     )
+                    if self.target_resource:
+                        game.release_resource(self.target_resource)
+                        self.reservations.pop(self.resource_type, None)
+                        self.target_resource = None
+                        self.resource_type = None
                     self.state = "idle"
                     self._wander(game)
                     return

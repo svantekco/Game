@@ -1,46 +1,21 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import heapq
 import logging
-import random
-from typing import Dict, List, Optional, Tuple, Iterable, Set
+from dataclasses import dataclass, field
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
+from .constants import SEARCH_LIMIT, TileType
 from .map import GameMap
-from .constants import TileType, SEARCH_LIMIT
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class _ScaledMap:
-    """Simple wrapper that presents a scaled view of a ``GameMap``."""
-
-    base: GameMap
-    factor: int
-
-    @property
-    def width(self) -> int:
-        return self.base.width // self.factor
-
-    @property
-    def height(self) -> int:
-        return self.base.height // self.factor
-
-    def get_tile(self, x: int, y: int):
-        return self.base.get_tile(x * self.factor, y * self.factor)
-
-
 @dataclass(order=True)
-class _PQNode:
-    priority: float
+class _Node:
+    f: int
     count: int
-    position: Tuple[int, int] = field(compare=False)
-
-
-def _heuristic(a: Tuple[int, int], b: Tuple[int, int]) -> float:
-    """Manhattan distance heuristic."""
-    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+    pos: Tuple[int, int] = field(compare=False)
 
 
 def _neighbors(pos: Tuple[int, int], gmap: GameMap) -> Iterable[Tuple[int, int]]:
@@ -55,76 +30,15 @@ def _neighbors(pos: Tuple[int, int], gmap: GameMap) -> Iterable[Tuple[int, int]]
         yield (x, y + 1)
 
 
-def _is_passable(
-    pos: Tuple[int, int], gmap: GameMap, buildings: Iterable[object]
-) -> bool:
-    """Check if the tile at ``pos`` can be traversed."""
-
-    x, y = pos
-    tile = gmap.get_tile(x, y)
+def _passable(pos: Tuple[int, int], gmap: GameMap, buildings: Iterable[object]) -> bool:
+    tile = gmap.get_tile(*pos)
     if not tile.passable:
         return False
-
     for b in buildings:
-        # Buildings may span multiple cells via a ``cells`` helper
-        cells: Iterable[Tuple[int, int]]
-        if hasattr(b, "cells"):
-            cells = getattr(b, "cells")()
-        else:
-            bx, by = getattr(b, "position", (None, None))
-            cells = [(bx, by)]
-        for cx, cy in cells:
-            if cx == x and cy == y and not getattr(b, "passable", False):
-                return False
-
+        cells = b.cells() if hasattr(b, "cells") else [getattr(b, "position", (0, 0))]
+        if pos in cells and not getattr(b, "passable", False):
+            return False
     return True
-
-
-def _is_road(pos: Tuple[int, int], buildings: Iterable[object]) -> bool:
-    """Return True if a completed Road occupies ``pos``."""
-    x, y = pos
-    for b in buildings:
-        if (
-            getattr(b, "position", None) == (x, y)
-            and getattr(b, "blueprint", None) is not None
-            and getattr(b.blueprint, "name", "") == "Road"
-            and getattr(b, "complete", False)
-        ):
-            return True
-    return False
-
-
-def _step_cost(
-    pos: Tuple[int, int], gmap: GameMap, buildings: Iterable[object]
-) -> float:
-    """Return traversal cost for ``pos`` factoring in roads."""
-    return 0.5 if _is_road(pos, buildings) else 1.0
-
-
-def _nearest_passable(
-    start: Tuple[int, int], gmap: GameMap, search_limit: int = SEARCH_LIMIT
-) -> Tuple[int, int]:
-    """Return ``start`` if passable else the closest passable tile."""
-    if gmap.get_tile(*start).passable:
-        return start
-
-    from collections import deque
-
-    q = deque([start])
-    visited = {start}
-    explored = 0
-    while q and explored < search_limit:
-        x, y = q.popleft()
-        explored += 1
-        for n in _neighbors((x, y), gmap):
-            if n in visited:
-                continue
-            visited.add(n)
-            if gmap.get_tile(*n).passable:
-                return n
-            q.append(n)
-    logger.debug("_nearest_passable hit search limit from %s", start)
-    return start
 
 
 def find_path(
@@ -135,61 +49,44 @@ def find_path(
     *,
     search_limit: int = SEARCH_LIMIT,
 ) -> List[Tuple[int, int]]:
-    """A* pathfinding from start to goal. Returns list of waypoints."""
-
+    """Simple A* pathfinding returning a list of waypoints."""
     if buildings is None:
         buildings = []
-
-    open_heap: List[_PQNode] = []
-    heapq.heappush(open_heap, _PQNode(0.0, 0, start))
-    g_score: Dict[Tuple[int, int], float] = {start: 0.0}
-    came_from: Dict[Tuple[int, int], Tuple[int, int]] = {}
+    open_list: List[_Node] = []
+    heapq.heappush(open_list, _Node(0, 0, start))
+    came: Dict[Tuple[int, int], Tuple[int, int]] = {}
+    g_score: Dict[Tuple[int, int], int] = {start: 0}
     closed: Set[Tuple[int, int]] = set()
-    counter = 1
-
+    count = 1
     explored = 0
-    while open_heap:
-        node = heapq.heappop(open_heap)
-        current = node.position
-        explored += 1
-        if explored > search_limit:
-            logger.debug(
-                "find_path search limit reached (%d) from %s to %s",
-                search_limit,
-                start,
-                goal,
-            )
-            break
+
+    while open_list and explored < search_limit:
+        node = heapq.heappop(open_list)
+        current = node.pos
         if current == goal:
-            # reconstruct path
-            path: List[Tuple[int, int]] = [current]
-            while current in came_from:
-                current = came_from[current]
+            path = [current]
+            while current in came:
+                current = came[current]
                 path.append(current)
             path.reverse()
             return path
         if current in closed:
             continue
         closed.add(current)
-
+        explored += 1
         for n in _neighbors(current, gmap):
-            if not _is_passable(n, gmap, buildings):
+            if not _passable(n, gmap, buildings):
                 continue
-            tentative_g = g_score[current] + _step_cost(n, gmap, buildings)
-            if tentative_g < g_score.get(n, float("inf")):
-                came_from[n] = current
-                g_score[n] = tentative_g
-                f_score = tentative_g + _heuristic(n, goal)
-                heapq.heappush(open_heap, _PQNode(f_score, counter, n))
-                counter += 1
+            tentative = g_score[current] + 1
+            if tentative < g_score.get(n, 1_000_000):
+                came[n] = current
+                g_score[n] = tentative
+                f = tentative + abs(goal[0] - n[0]) + abs(goal[1] - n[1])
+                heapq.heappush(open_list, _Node(f, count, n))
+                count += 1
 
-    logger.debug(
-        "find_path failed from %s to %s after exploring %d nodes",
-        start,
-        goal,
-        explored,
-    )
-    return []  # no path found
+    logger.debug("find_path failed from %s to %s after %d", start, goal, explored)
+    return []
 
 
 def find_path_fast(
@@ -199,269 +96,10 @@ def find_path_fast(
     buildings: Iterable[object] | None = None,
     *,
     search_limit: int = SEARCH_LIMIT,
-    coarse_distance: int = 50,
-    step: int = 4,
+    **_: int,
 ) -> List[Tuple[int, int]]:
-    """Return a path using hierarchical search for long distances."""
-
-    if buildings is None:
-        buildings = []
-
-    dx = abs(goal[0] - start[0])
-    dy = abs(goal[1] - start[1])
-    if max(dx, dy) > coarse_distance:
-        return find_path_hierarchical(
-            start,
-            goal,
-            gmap,
-            buildings,
-            coarse_distance=coarse_distance,
-            step=step,
-            search_limit=search_limit,
-        )
-
+    """Compatibility wrapper for the previous fast pathfinder."""
     return find_path(start, goal, gmap, buildings, search_limit=search_limit)
-
-
-def _map_cache(
-    gmap: GameMap,
-) -> Dict[Tuple[TileType, int, int, int], List[List[Tuple[int, int]]]]:
-    """Return the cluster cache dictionary attached to ``gmap``."""
-
-    cache = getattr(gmap, "_cluster_cache", None)
-    if cache is None:
-        cache = {}
-        setattr(gmap, "_cluster_cache", cache)
-    return cache
-
-
-def _cluster_key(
-    gmap: GameMap, resource: TileType, center: Tuple[int, int], radius: int
-) -> Tuple[TileType, int, int, int]:
-    """Return a stable key for a region around ``center``."""
-
-    return (
-        resource,
-        center[0] // (radius * 2),
-        center[1] // (radius * 2),
-        radius,
-    )
-
-
-def _compute_clusters(
-    gmap: GameMap, resource: TileType, center: Tuple[int, int], radius: int
-) -> List[List[Tuple[int, int]]]:
-    """Return clusters of ``resource`` tiles within ``radius`` of ``center``."""
-
-    min_x = max(0, center[0] - radius)
-    max_x = min(gmap.width - 1, center[0] + radius)
-    min_y = max(0, center[1] - radius)
-    max_y = min(gmap.height - 1, center[1] + radius)
-
-    visited: Set[Tuple[int, int]] = set()
-    clusters: List[List[Tuple[int, int]]] = []
-
-    for x in range(min_x, max_x + 1):
-        for y in range(min_y, max_y + 1):
-            pos = (x, y)
-            if pos in visited:
-                continue
-            tile = gmap.get_tile(x, y)
-            if tile.type is not resource or tile.resource_amount <= 0:
-                continue
-            cluster: List[Tuple[int, int]] = []
-            stack = [pos]
-            visited.add(pos)
-            while stack:
-                cx, cy = stack.pop()
-                cluster.append((cx, cy))
-                for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-                    nx, ny = cx + dx, cy + dy
-                    npos = (nx, ny)
-                    if (
-                        min_x <= nx <= max_x
-                        and min_y <= ny <= max_y
-                        and npos not in visited
-                    ):
-                        t = gmap.get_tile(nx, ny)
-                        if t.type is resource and t.resource_amount > 0:
-                            visited.add(npos)
-                            stack.append(npos)
-            clusters.append(cluster)
-
-    return clusters
-
-
-def _get_clusters(
-    gmap: GameMap, resource: TileType, center: Tuple[int, int], radius: int
-) -> List[List[Tuple[int, int]]]:
-    """Retrieve cached clusters near ``center`` or compute them."""
-
-    cache = _map_cache(gmap)
-    key = _cluster_key(gmap, resource, center, radius)
-    if key not in cache:
-        clusters: List[List[Tuple[int, int]]] = []
-        pre = getattr(getattr(gmap, "precomputed_clusters", None), "get", lambda _: [])(
-            resource
-        )
-        for cx, cy in pre:
-            if abs(cx - center[0]) <= radius * 2 and abs(cy - center[1]) <= radius * 2:
-                clusters.append([(cx, cy)])
-        clusters.extend(_compute_clusters(gmap, resource, center, radius))
-        logger.debug(
-            "_get_clusters computed %d clusters for %s around %s (r=%d)",
-            len(clusters),
-            resource.name,
-            center,
-            radius,
-        )
-        cache[key] = clusters
-    else:
-        logger.debug(
-            "_get_clusters using cached clusters (%d) for %s around %s (r=%d)",
-            len(cache[key]),
-            resource.name,
-            center,
-            radius,
-        )
-    return cache[key]
-
-
-def _nearest_resource_bfs(
-    start: Tuple[int, int],
-    resource_type: TileType,
-    gmap: GameMap,
-    buildings: Iterable[object],
-    search_limit: int,
-    avoid: Iterable[Tuple[int, int]] | None = None,
-) -> Tuple[Optional[Tuple[int, int]], List[Tuple[int, int]]]:
-    """Fallback BFS search used when clustering fails."""
-
-    from collections import deque
-
-    if avoid is None:
-        avoid = []
-    logger.debug(
-        "_nearest_resource_bfs start=%s type=%s avoid=%d limit=%d",
-        start,
-        resource_type.name,
-        len(avoid),
-        search_limit,
-    )
-    q = deque([start])
-    came_from: Dict[Tuple[int, int], Tuple[int, int] | None] = {start: None}
-    explored = 0
-
-    while q and explored < search_limit:
-        current = q.popleft()
-        explored += 1
-
-        tile = gmap.get_tile(*current)
-        if (
-            tile.type is resource_type
-            and tile.resource_amount > 0
-            and all(
-                max(abs(current[0] - ax), abs(current[1] - ay)) >= 2 for ax, ay in avoid
-            )
-        ):
-            found = current
-            path: List[Tuple[int, int]] = [current]
-            while came_from[current] is not None:
-                current = came_from[current]  # type: ignore[index]
-                path.append(current)
-            path.reverse()
-            logger.debug(
-                "_nearest_resource_bfs found %s after exploring %d", found, explored
-            )
-            return found, path
-
-        neighbors = list(_neighbors(current, gmap))
-        random.shuffle(neighbors)
-        for n in neighbors:
-            if n in came_from:
-                continue
-            if not _is_passable(n, gmap, buildings):
-                continue
-            if any(max(abs(n[0] - ax), abs(n[1] - ay)) < 2 for ax, ay in avoid):
-                continue
-            came_from[n] = current
-            q.append(n)
-
-    logger.debug(
-        "_nearest_resource_bfs explored %d nodes without result from %s",
-        explored,
-        start,
-    )
-    return None, []
-
-
-def find_nearest_resource(
-    start: Tuple[int, int],
-    resource_type: TileType,
-    gmap: GameMap,
-    buildings: Iterable[object] | None = None,
-    *,
-    search_limit: int = SEARCH_LIMIT,
-    cluster_radius: int = 25,
-    avoid: Iterable[Tuple[int, int]] | None = None,
-) -> Tuple[Optional[Tuple[int, int]], List[Tuple[int, int]]]:
-    """Find the closest tile of ``resource_type`` using cached clusters."""
-
-    if buildings is None:
-        buildings = []
-    if avoid is None:
-        avoid = []
-
-    logger.debug(
-        "find_nearest_resource start=%s type=%s radius=%d avoid=%d limit=%d",
-        start,
-        resource_type.name,
-        cluster_radius,
-        len(avoid),
-        search_limit,
-    )
-
-    clusters = _get_clusters(gmap, resource_type, start, cluster_radius)
-
-    best_path: List[Tuple[int, int]] = []
-    best_target: Optional[Tuple[int, int]] = None
-
-    for cluster in clusters:
-        options = [
-            p
-            for p in cluster
-            if all(max(abs(p[0] - ax), abs(p[1] - ay)) >= 2 for ax, ay in avoid)
-        ]
-        if not options:
-            continue
-        candidate = min(
-            options, key=lambda p: abs(p[0] - start[0]) + abs(p[1] - start[1])
-        )
-        path = find_path(start, candidate, gmap, buildings, search_limit=search_limit)
-        if path:
-            logger.debug(
-                "cluster candidate %s path length %d", candidate, len(path)
-            )
-            if not best_path or len(path) < len(best_path):
-                best_path = path
-                best_target = candidate
-
-    if best_target is not None:
-        return best_target, best_path
-
-    # Fallback to BFS if no cluster produced a viable path
-    pos, path = _nearest_resource_bfs(
-        start, resource_type, gmap, buildings, search_limit, avoid
-    )
-    if pos is not None:
-        return pos, path
-    logger.debug(
-        "find_nearest_resource failed cluster search around %s for %s",
-        start,
-        resource_type.name,
-    )
-    # Last resort ignore avoidance
-    return _nearest_resource_bfs(start, resource_type, gmap, buildings, search_limit)
 
 
 def find_path_hierarchical(
@@ -470,102 +108,12 @@ def find_path_hierarchical(
     gmap: GameMap,
     buildings: Iterable[object] | None = None,
     *,
-    coarse_distance: int = 50,
-    step: int = 4,
+    coarse_distance: int = 0,
+    step: int = 1,
     search_limit: int = SEARCH_LIMIT,
 ) -> List[Tuple[int, int]]:
-    """Hierarchical A* pathfinding with a coarse pre-pass.
-
-    For long distance travel the search space can explode.  This helper first
-    plans a route on a down-scaled version of the map to get close to the
-    target before running the normal ``find_path`` for the fine grained steps.
-    """
-
-    if buildings is None:
-        buildings = []
-
-    start_pass = _nearest_passable(start, gmap, search_limit)
-    goal_pass = _nearest_passable(goal, gmap, search_limit)
-
-    dx = abs(goal_pass[0] - start_pass[0])
-    dy = abs(goal_pass[1] - start_pass[1])
-    if max(dx, dy) <= coarse_distance or step <= 1:
-        path = find_path(
-            start_pass, goal_pass, gmap, buildings, search_limit=search_limit
-        )
-        if start_pass != start:
-            prefix = find_path(
-                start, start_pass, gmap, buildings, search_limit=search_limit
-            )
-            if prefix:
-                path = prefix[:-1] + path
-        if goal_pass != goal:
-            suffix = find_path(
-                goal_pass, goal, gmap, buildings, search_limit=search_limit
-            )
-            if suffix:
-                path = path + suffix[1:]
-        return path
-
-    scaled = _ScaledMap(gmap, step)
-    coarse_start = (start_pass[0] // step, start_pass[1] // step)
-    coarse_goal = (goal_pass[0] // step, goal_pass[1] // step)
-
-    coarse_path = find_path(
-        coarse_start, coarse_goal, scaled, buildings, search_limit=search_limit
-    )
-    if not coarse_path:
-        logger.debug(
-            "find_path_hierarchical failed coarse pass from %s to %s",
-            start,
-            goal,
-        )
-        return []
-
-    path: List[Tuple[int, int]] = []
-    current = start_pass
-    for cp in coarse_path[1:]:
-        target = (cp[0] * step, cp[1] * step)
-        segment = find_path(current, target, gmap, buildings, search_limit=search_limit)
-        if not segment:
-            logger.debug(
-                "find_path_hierarchical failed segment from %s to %s",
-                current,
-                target,
-            )
-            return []
-        if path and segment[0] == path[-1]:
-            path.extend(segment[1:])
-        else:
-            path.extend(segment)
-        current = target
-
-    final_segment = find_path(
-        current, goal_pass, gmap, buildings, search_limit=search_limit
-    )
-    if not final_segment:
-        logger.debug(
-            "find_path_hierarchical failed final segment from %s to %s",
-            current,
-            goal_pass,
-        )
-        return []
-    if path and final_segment[0] == path[-1]:
-        path.extend(final_segment[1:])
-    else:
-        path.extend(final_segment)
-
-    if start_pass != start:
-        prefix = find_path(
-            start, start_pass, gmap, buildings, search_limit=search_limit
-        )
-        if prefix:
-            path = prefix[:-1] + path
-    if goal_pass != goal:
-        suffix = find_path(goal_pass, goal, gmap, buildings, search_limit=search_limit)
-        if suffix:
-            path = path + suffix[1:]
-    return path
+    """Simplified hierarchical pathfinder using a single A* pass."""
+    return find_path(start, goal, gmap, buildings, search_limit=search_limit)
 
 
 def find_path_to_building_adjacent(
@@ -576,36 +124,60 @@ def find_path_to_building_adjacent(
     *,
     search_limit: int = SEARCH_LIMIT,
 ) -> List[Tuple[int, int]]:
-    """Return a path to a passable tile adjacent to ``building``."""
-
     if buildings is None:
         buildings = []
-
-    if hasattr(building, "cells"):
-        cells = building.cells()
-    else:
-        cells = [getattr(building, "position", (0, 0))]
-
+    cells = building.cells() if hasattr(building, "cells") else [building.position]
     candidates: Set[Tuple[int, int]] = set()
     for bx, by in cells:
         for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
             cx, cy = bx + dx, by + dy
             if 0 <= cx < gmap.width and 0 <= cy < gmap.height:
-                if _is_passable((cx, cy), gmap, buildings):
+                if _passable((cx, cy), gmap, buildings):
                     candidates.add((cx, cy))
-
     best: List[Tuple[int, int]] = []
     for cand in candidates:
-        path = find_path_fast(
-            start,
-            cand,
-            gmap,
-            buildings,
-            search_limit=search_limit,
-            coarse_distance=50,
-            step=4,
-        )
+        path = find_path(start, cand, gmap, buildings, search_limit=search_limit)
         if path and (not best or len(path) < len(best)):
             best = path
-
     return best
+
+
+def find_nearest_resource(
+    start: Tuple[int, int],
+    resource_type: TileType,
+    gmap: GameMap,
+    buildings: Iterable[object] | None = None,
+    *,
+    search_limit: int = SEARCH_LIMIT,
+    avoid: Iterable[Tuple[int, int]] | None = None,
+) -> Tuple[Optional[Tuple[int, int]], List[Tuple[int, int]]]:
+    """Return the nearest tile of ``resource_type`` using BFS."""
+    if buildings is None:
+        buildings = []
+    if avoid is None:
+        avoid = []
+    avoid_set = set(avoid)
+    from collections import deque
+
+    q = deque([(start, [start])])
+    visited = {start}
+    explored = 0
+
+    while q and explored < search_limit:
+        pos, path = q.popleft()
+        tile = gmap.get_tile(*pos)
+        if (
+            tile.type is resource_type
+            and tile.resource_amount > 0
+            and pos not in avoid_set
+        ):
+            return pos, path
+        explored += 1
+        for n in _neighbors(pos, gmap):
+            if n in visited or not _passable(n, gmap, buildings):
+                continue
+            visited.add(n)
+            q.append((n, path + [n]))
+
+    logger.debug("find_nearest_resource exhausted search from %s", start)
+    return None, []
