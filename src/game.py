@@ -109,6 +109,11 @@ class Game:
             self._clear_zone(z)
             self.zones[z.type] = z
 
+        # Reserve some storage capacity for resources gathered later
+        reserve = 20
+        if self.storage["wood"] > self.storage_capacity - reserve:
+            self.storage["wood"] = self.storage_capacity - reserve
+
         from collections import defaultdict
 
         self.tile_usage: Dict[Tuple[int, int], int] = defaultdict(int)
@@ -343,7 +348,8 @@ class Game:
         q = deque([origin])
         visited = {origin}
         searched = 0
-        while q and searched < SEARCH_LIMIT:
+        limit = SEARCH_LIMIT * 10
+        while q and searched < limit:
             x, y = q.popleft()
             searched += 1
             if self.map.get_tile(x, y).passable:
