@@ -11,4 +11,5 @@ BLUEPRINT = BuildingBlueprint(
     color=Color.PATH,
     wood=0,
     stone=5,
+    passable=True,
 )
