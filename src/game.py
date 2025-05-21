@@ -689,6 +689,7 @@ class Game:
         )
         status = (
             f"Tick:{self.tick_count} "
+            f"Time:{self.world.time_of_day} "
             f"Cam:{self.camera.x},{self.camera.y} "
             f"Zoom:{self.camera.zoom} "
             f"Wood:{self.storage['wood']} "

@@ -17,3 +17,12 @@ class World:
     def is_night(self) -> bool:
         cycle_pos = self.tick_count % self.day_length
         return cycle_pos >= self.day_length // 2
+
+    @property
+    def time_of_day(self) -> str:
+        """Return the current time of day as ``HH:MM``."""
+        cycle_pos = self.tick_count % self.day_length
+        day_fraction = cycle_pos / self.day_length
+        hours = int(day_fraction * 24)
+        minutes = int((day_fraction * 24 - hours) * 60)
+        return f"{hours:02d}:{minutes:02d}"
