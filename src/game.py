@@ -9,7 +9,6 @@ from typing import Dict, List, Tuple, Optional
 
 from .constants import (
     TileType,
-    ZOOM_LEVELS,
     TICK_RATE,
     UI_REFRESH_INTERVAL,
     MAX_STORAGE,
@@ -42,9 +41,11 @@ class Job:
 class Game:
     """Owns game state and runs the main loop."""
 
-    def __init__(self, seed: int | None = None) -> None:
+    def __init__(self, seed: int | None = None, preview: bool = False) -> None:
         random.seed(seed)
         self.map = GameMap(seed=seed)
+        if preview:
+            self.map.terrain.display_preview()
         self.entities: List[Villager] = []
         self.buildings: List[Building] = []
         self.build_queue: List[Building] = []
@@ -356,9 +357,9 @@ class Game:
             x, y = q.popleft()
             searched += 1
             if self.map.get_tile(x, y).passable:
-                trees = self._count_resource_nearby((x, y), TileType.TREE, radius=10)
-                rocks = self._count_resource_nearby((x, y), TileType.ROCK, radius=10)
-                if trees >= 5 and rocks >= 5:
+                trees = self._count_resource_nearby((x, y), TileType.TREE, radius=100)
+                rocks = self._count_resource_nearby((x, y), TileType.ROCK, radius=100)
+                if trees > 0 and rocks > 0:
                     return (x, y)
             for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
                 nx, ny = x + dx, y + dy
@@ -490,6 +491,12 @@ class Game:
         self, blueprint: BuildingBlueprint
     ) -> Optional[Tuple[int, int]]:
         """Find a quarry site near existing buildings prioritising stone density."""
+        clusters = getattr(self.map, "precomputed_clusters", {}).get(TileType.ROCK, [])
+        for cx, cy in clusters:
+            if self.is_area_free((cx, cy), blueprint):
+                if self._count_resource_nearby((cx, cy), TileType.ROCK, radius=2) > 0:
+                    return (cx, cy)
+
         from collections import deque
 
         starts = [b.position for b in self.buildings] or [self.storage_pos]
@@ -497,7 +504,7 @@ class Game:
         q = deque(starts)
         best: Tuple[int, int] | None = None
         best_score = -1
-        search_limit = 500
+        search_limit = 10000
         searched = 0
         while q and searched < search_limit:
             p = q.popleft()
