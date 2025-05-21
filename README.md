@@ -2,7 +2,7 @@
 
 ## About the Game
 
-**VillageSim** is a real‑time, terminal‑based medieval village simulator written entirely in Python. A procedurally generated **1 000 × 1 000‑tile** world—lush grasslands, dense forests, rugged stone outcrops, and meandering rivers—comes alive in nothing but Unicode glyphs.  From the first swing of an axe to the rise of a bustling hamlet, every moment is driven by an agent‑based simulation that plays out before your eyes at **one tick per second**.
+**VillageSim** is a real‑time, terminal‑based medieval village simulator written entirely in Python. A procedurally generated **1 000 × 1 000‑tile** world—lush grasslands, dense forests, rugged stone outcrops, and meandering rivers—comes alive in nothing but Unicode glyphs.  From the first swing of an axe to the rise of a bustling hamlet, every moment is driven by an agent‑based simulation that plays out before your eyes at **around 60 ticks per second by default**.
 
 Rather than micromanaging individual settlers, you watch emergent stories unfold.  Each villager is an autonomous entity that can plan paths, gather resources, construct buildings, and deliver supplies back to storage, all while navigating a living landscape that reacts to their actions.  A simple finite‑state machine turns a lone labourer into a self‑sufficient workforce that knows when to chop, haul, build, and rest.
 
@@ -20,6 +20,7 @@ Powered by the **blessed** TUI library (with a curses fallback), VillageSim runs
 * **Dynamic Construction** – Town Halls, Lumberyards, Houses, and Watchtowers emerge where resources allow, triggering population growth.
 * **Resource Economy** – Wood and stone flow through inventories, storage, and building queues.
 * **HUD & Controls** – Real‑time stats panel plus hotkeys for pause, step, help, and camera centring.
+* **Caching & Logging** – Lighting results are cached and debug logging reveals render timings.
 * **Extensible & Test‑Backed** – Modular architecture, unit tests, and CI workflow encourage contribution and experimentation.
 
 ## Game Logic
@@ -67,7 +68,8 @@ $ python3 -m src.main [--seed 42] [--show-fps] [-v]
 | `q`       | Quit             |
 
 The bottom row shows the current tick, camera position/zoom, stored resources
-and population. Use `--show-fps` to display performance metrics.
+and population. Use `--show-fps` to display performance metrics. Pass `-v` to
+enable debug logging which now reports render timing and lighting cost.
 
 ---
 
@@ -79,7 +81,7 @@ and population. Use `--show-fps` to display performance metrics.
 4. **Renderer skeleton** – Blessed‑powered screen clear & glyph draw.
 5. **Camera & viewport logic** – World‑to‑screen transforms, panning, zoom.
 6. **Input handling loop** – Non‑blocking key capture dispatched to camera/game.
-7. **Game class with tick scheduler** – Update‑then‑render at 1 Hz.
+7. **Game class with tick scheduler** – Update‑then‑render at 60 Hz.
 8. **Villager entity & rendering** – `@` glyph overlay with per‑agent colours.
 9. **Pathfinding module** – A\* / Dijkstra utilities plus nearest‑resource queries.
 10. **Path visualisation** – Faint `·` breadcrumb of current route.

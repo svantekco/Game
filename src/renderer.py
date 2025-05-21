@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import sys
+import time
+import logging
 from typing import TYPE_CHECKING
 
 from .constants import Color, TileType, STATUS_PANEL_Y, Mood, ZoneType, UI_COLOR_RGB
 from .filters import apply_lighting, day_night_filter, zone_filter
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:  # pragma: no cover - imports for type hints only
     from .map import GameMap
@@ -177,6 +181,9 @@ class Renderer:
         if filters is None:
             filters = [zone_filter, day_night_filter]
 
+        start_total = time.perf_counter()
+        lighting_time = 0.0
+
         glyph_grid: list[list[str]] = []
         color_grid: list[list[object]] = []
 
@@ -188,7 +195,9 @@ class Renderer:
                 wy = camera.y + ty
                 tile = gmap.get_tile(wx, wy)
                 glyph = self._tile_to_render(tile.type, detailed)
+                t0 = time.perf_counter()
                 color = apply_lighting(tile, day_fraction, filters)
+                lighting_time += time.perf_counter() - t0
                 if is_night:
                     glyph = glyph.lower()
 
@@ -271,6 +280,13 @@ class Renderer:
                     color_grid[sy][sx + 1] = Color.UI
 
         self.draw_grid(glyph_grid, color_grid)
+
+        total_time = (time.perf_counter() - start_total) * 1000
+        logger.debug(
+            "render_game took %.2f ms (lighting %.2f ms)",
+            total_time,
+            lighting_time * 1000,
+        )
 
     def render_status(self, text: str) -> None:
         """Render a status line at the bottom of the screen."""

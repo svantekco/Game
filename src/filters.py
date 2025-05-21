@@ -1,7 +1,8 @@
 # Lighting and colour filter pipeline
 from __future__ import annotations
 
-from typing import Callable, Iterable, Tuple
+from typing import Callable, Iterable, Tuple, Dict
+import logging
 import math
 
 from .constants import TileType, ZoneType
@@ -9,6 +10,12 @@ from .tile import Tile
 
 ColorRGB = Tuple[int, int, int]
 Filter = Callable[[ColorRGB, Tile, float], ColorRGB]
+
+# Cache for lighting results. Keyed by tile type, zone, rounded day fraction and
+# filter functions. This avoids recalculating colours for identical conditions.
+_CACHE: Dict[tuple[TileType, ZoneType | None, int, tuple[Filter, ...]], ColorRGB] = {}
+_MAX_CACHE = 2048
+logger = logging.getLogger(__name__)
 
 # Base colours for tiles ----------------------------------------------
 BASE_TILE_COLOURS: dict[TileType, ColorRGB] = {
@@ -28,15 +35,32 @@ ZONE_TINTS: dict[ZoneType, ColorRGB] = {
 
 # Pipeline -------------------------------------------------------------
 
-def apply_lighting(tile: Tile, day_fraction: float, filters: Iterable[Filter]) -> ColorRGB:
-    """Return final colour for ``tile`` after applying ``filters``."""
+
+def apply_lighting(
+    tile: Tile, day_fraction: float, filters: Iterable[Filter]
+) -> ColorRGB:
+    """Return final colour for ``tile`` after applying ``filters``.
+
+    Results are cached based on tile type, zone and day fraction (rounded to two
+    decimal places) so repeated frames are faster.
+    """
+    day_key = int(day_fraction * 100)
+    key = (tile.type, tile.zone, day_key, tuple(filters))
+    if key in _CACHE:
+        return _CACHE[key]
+
     color = BASE_TILE_COLOURS.get(tile.type, (255, 255, 255))
     for f in filters:
         color = f(color, tile, day_fraction)
+
+    if len(_CACHE) >= _MAX_CACHE:
+        _CACHE.pop(next(iter(_CACHE)))
+    _CACHE[key] = color
     return color
 
 
 # Built-in filters ----------------------------------------------------
+
 
 def day_night_filter(color: ColorRGB, tile: Tile, day_fraction: float) -> ColorRGB:
     """Darken or lighten ``color`` based on ``day_fraction``.
