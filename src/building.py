@@ -17,6 +17,8 @@ class BuildingBlueprint:
     color: Color
     wood: int = 0
     stone: int = 0
+    capacity: int = 0
+    efficiency: float = 1.0
 
 
 @dataclass
@@ -28,6 +30,24 @@ class Building:
     progress: int = 0
     passable: bool = True
     residents: List[int] = field(default_factory=list)
+    level: int = 1
+    capacity: int = 0
+    efficiency: float = 1.0
+
+    # ---------------------------------------------------------------
+    def upgrade_cost(self) -> Tuple[int, int]:
+        """Return wood and stone cost for the next upgrade."""
+        target = self.level + 1
+        return (
+            self.blueprint.wood * target,
+            self.blueprint.stone * target,
+        )
+
+    def apply_upgrade(self) -> None:
+        """Increase building stats when an upgrade occurs."""
+        self.level += 1
+        self.capacity += 1
+        self.efficiency += 0.1
 
     def cells(self) -> List[Tuple[int, int]]:
         """World coordinates occupied by this building."""

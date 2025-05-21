@@ -421,6 +421,77 @@ class Game:
         # Default to gathering wood so villagers never stay idle
         return Job("gather", TileType.TREE)
 
+    # --- Upgrade System ---------------------------------------------
+    def _townhall(self) -> Building:
+        for b in self.buildings:
+            if b.blueprint.name == "TownHall":
+                return b
+        raise RuntimeError("No Town Hall")
+
+    def _townhall_requirements(self) -> Dict[str, Tuple[int, int]]:
+        th = self._townhall()
+        reqs: Dict[str, Tuple[int, int]] = {}
+        for bpname, bp in self.blueprints.items():
+            if bpname == "TownHall":
+                continue
+            built = [b for b in self.buildings if b.blueprint.name == bpname]
+            if not built:
+                continue
+            avg_level = sum(b.level for b in built) / len(built)
+            reqs[bpname] = (th.level + 1, int(avg_level) + 1)
+        return reqs
+
+    def _meets_townhall_requirements(self) -> bool:
+        reqs = self._townhall_requirements()
+        for name, (cnt, lvl) in reqs.items():
+            built = [
+                b
+                for b in self.buildings
+                if b.blueprint.name == name and b.level >= lvl
+            ]
+            if len(built) < cnt:
+                return False
+        return True
+
+    def _can_upgrade(self, b: Building) -> bool:
+        wood, stone = b.upgrade_cost()
+        return self.storage.get("wood", 0) >= wood and self.storage.get("stone", 0) >= stone
+
+    def _upgrade_building(self, b: Building) -> None:
+        wood, stone = b.upgrade_cost()
+        self.storage["wood"] -= wood
+        self.storage["stone"] -= stone
+        b.apply_upgrade()
+
+    def _auto_upgrade(self) -> None:
+        th = self._townhall()
+        if self._can_upgrade(th) and self._meets_townhall_requirements():
+            self._upgrade_building(th)
+            return
+        for b in self.buildings:
+            if b is th:
+                continue
+            if self._can_upgrade(b):
+                self._upgrade_building(b)
+                break
+
+    def _next_upgrade_hint(self) -> List[str]:
+        th = self._townhall()
+        lines: List[str] = []
+        reqs = self._townhall_requirements()
+        if not (self._can_upgrade(th) and self._meets_townhall_requirements()):
+            lines.append(f"Next: TownHall -> L{th.level + 1}")
+            for name, (cnt, lvl) in reqs.items():
+                have = len(
+                    [b for b in self.buildings if b.blueprint.name == name and b.level >= lvl]
+                )
+                lines.append(f"{name}: {have}/{cnt} lvl>= {lvl}")
+            w, s = th.upgrade_cost()
+            lines.append(f"Cost W:{w} S:{s}")
+        else:
+            lines.append("TownHall ready to upgrade")
+        return lines
+
     # --- Game Loop -----------------------------------------------------
     def run(self, show_fps: bool = False) -> None:
         """Run the main loop until quit."""
@@ -549,6 +620,7 @@ class Game:
         self._assign_homes()
         self._plan_roads()
         self._produce_food()
+        self._auto_upgrade()
 
         # Prioritise building a Quarry when possible
         quarry_bp = self.blueprints["Quarry"]
@@ -734,6 +806,11 @@ class Game:
             if progress_lines:
                 self.renderer.render_overlay(progress_lines, start_y=overlay_start)
                 overlay_start += len(progress_lines)
+
+            upgrade_lines = self._next_upgrade_hint()
+            if upgrade_lines:
+                self.renderer.render_overlay(upgrade_lines, start_y=overlay_start)
+                overlay_start += len(upgrade_lines)
 
         if self.show_actions:
             lines = [f"Villager {v.id}: {v.thought(self)}" for v in self.entities]
