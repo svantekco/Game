@@ -123,6 +123,34 @@ class Villager:
         self.cooldown = self._action_delay(game, delay)
         return True
 
+    def _wander(self, game: "Game") -> bool:
+        """Move to a random adjacent passable tile."""
+        neighbors = [
+            (self.position[0] + 1, self.position[1]),
+            (self.position[0] - 1, self.position[1]),
+            (self.position[0], self.position[1] + 1),
+            (self.position[0], self.position[1] - 1),
+        ]
+        random.shuffle(neighbors)
+        for nx, ny in neighbors:
+            if not (0 <= nx < game.map.width and 0 <= ny < game.map.height):
+                continue
+            tile = game.map.get_tile(nx, ny)
+            if not tile.passable:
+                continue
+            blocked = False
+            for b in game.buildings:
+                cells = b.cells() if hasattr(b, "cells") else [b.position]
+                if (nx, ny) in cells and not b.passable:
+                    blocked = True
+                    break
+            if blocked:
+                continue
+            self.target_path = [(nx, ny)]
+            self._move_step(game)
+            return True
+        return False
+
     def thought(self, game: "Game") -> str:
         if self.cooldown > 0:
             return "Waiting..."
@@ -235,6 +263,7 @@ class Villager:
                     search_limit=game.get_search_limit(),
                 )
                 if pos is None:
+                    self._wander(game)
                     return
                 self.resource_type = resource_type
                 self.target_resource = pos
@@ -255,6 +284,21 @@ class Villager:
                 return
         if self.state == "gather":
             if self._move_step(game):
+                return
+            if self.target_resource and self.position != self.target_resource:
+                if not self.target_path:
+                    path = path_func(
+                        self.position,
+                        self.target_resource,
+                        game.map,
+                        game.buildings,
+                        search_limit=game.get_search_limit(),
+                    )
+                    self.target_path = path[1:]
+                    if not self.target_path:
+                        self.target_resource = None
+                        self.state = "idle"
+                        self._wander(game)
                 return
             if self.target_resource and self.position == self.target_resource:
                 tile = game.map.get_tile(*self.position)
@@ -290,6 +334,10 @@ class Villager:
                     search_limit=game.get_search_limit(),
                 )
                 self.target_path = path[1:]
+                if not self.target_path:
+                    self.state = "idle"
+                    self._wander(game)
+                    return
             if self._move_step(game):
                 return
             if self.position in game.storage_positions:
@@ -302,6 +350,27 @@ class Villager:
                 self.state = "idle"
         if self.state == "build":
             if self._move_step(game):
+                return
+            if (
+                self.target_building
+                and not self.target_path
+                and (
+                    abs(self.position[0] - self.target_building.position[0])
+                    + abs(self.position[1] - self.target_building.position[1])
+                    > 1
+                )
+            ):
+                path = find_path_to_building_adjacent(
+                    self.position,
+                    self.target_building,
+                    game.map,
+                    game.buildings,
+                    search_limit=game.get_search_limit(),
+                )
+                self.target_path = path[1:]
+                if not self.target_path:
+                    self.state = "idle"
+                    self._wander(game)
                 return
             if self.target_building and (
                 abs(self.position[0] - self.target_building.position[0])
