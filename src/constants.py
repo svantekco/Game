@@ -44,7 +44,11 @@ MAX_STORAGE = 100
 
 # Maximum nodes explored during breadth-first searches to avoid hangs on
 # extremely large maps.
-SEARCH_LIMIT = 1000
+# Increased search limit so villagers can locate distant resources on the
+# expanded 100k x 100k world. The previous value was too small for some
+# starting seeds, leaving villagers unable to find stone and stalling
+# progression.
+SEARCH_LIMIT = 50000
 
 # Fixed colour for all UI elements (RGB)
 UI_COLOR_RGB = (255, 255, 255)
