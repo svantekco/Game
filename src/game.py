@@ -79,24 +79,24 @@ class Game:
         self.zones: Dict[ZoneType, Zone] = {}
         work_zone = Zone(
             ZoneType.WORK,
-            self.townhall_pos[0] - 25,
-            self.townhall_pos[1] - 25,
-            50,
-            50,
+            self.townhall_pos[0] - 5,
+            self.townhall_pos[1] - 5,
+            10,
+            10,
         )
         housing_zone = Zone(
             ZoneType.HOUSING,
-            work_zone.x - 50,
+            work_zone.x - 10,
             work_zone.y,
-            50,
-            50,
+            10,
+            10,
         )
         market_zone = Zone(
             ZoneType.MARKET,
             work_zone.x,
-            work_zone.y + 50,
-            50,
-            50,
+            work_zone.y + 10,
+            10,
+            10,
         )
         for z in (work_zone, housing_zone, market_zone):
             self.map.add_zone(z)
