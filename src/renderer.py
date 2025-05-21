@@ -183,10 +183,16 @@ class Renderer:
 
         start_total = time.perf_counter()
         lighting_time = 0.0
+        base_time = 0.0
+        building_time = 0.0
+        path_time = 0.0
+        villager_time = 0.0
+        draw_time = 0.0
 
         glyph_grid: list[list[str]] = []
         color_grid: list[list[object]] = []
 
+        t0 = time.perf_counter()
         for ty in range(camera.visible_tiles_y):
             glyph_row: list[str] = []
             color_row: list[object] = []
@@ -206,7 +212,9 @@ class Renderer:
             for _ in range(camera.zoom):
                 glyph_grid.append(glyph_row.copy())
                 color_grid.append(color_row.copy())
+        base_time = time.perf_counter() - t0
 
+        t0 = time.perf_counter()
         # Overlay buildings
         for b in buildings:
             render_fn = getattr(b, "glyph_for_progress", None)
@@ -254,7 +262,9 @@ class Renderer:
 
                     glyph_grid[sy][sx] = glyph
                     color_grid[sy][sx] = color
+        building_time = time.perf_counter() - t0
 
+        t0 = time.perf_counter()
         # Overlay villager paths first so the villager glyphs appear on top
         for vill in villagers:
             path = getattr(vill, "target_path", [])
@@ -263,7 +273,9 @@ class Renderer:
                 if 0 <= sy < len(glyph_grid) and 0 <= sx < len(glyph_grid[0]):
                     glyph_grid[sy][sx] = "\xb7"  # middle dot character
                     color_grid[sy][sx] = Color.PATH
+        path_time = time.perf_counter() - t0
 
+        t0 = time.perf_counter()
         # Overlay villagers
         for vill in villagers:
             sx, sy = camera.world_to_screen(vill.x, vill.y)
@@ -278,13 +290,22 @@ class Renderer:
                 if sx + 1 < len(glyph_grid[0]):
                     glyph_grid[sy][sx + 1] = mood_char
                     color_grid[sy][sx + 1] = Color.UI
+        villager_time = time.perf_counter() - t0
 
+        t0 = time.perf_counter()
         self.draw_grid(glyph_grid, color_grid)
+        draw_time = time.perf_counter() - t0
 
         total_time = (time.perf_counter() - start_total) * 1000
         logger.debug(
-            "render_game took %.2f ms (lighting %.2f ms)",
+            "render_game took %.2f ms (tiles %.2f ms, buildings %.2f ms, paths %.2f ms,"
+            " villagers %.2f ms, draw %.2f ms, lighting %.2f ms)",
             total_time,
+            base_time * 1000,
+            building_time * 1000,
+            path_time * 1000,
+            villager_time * 1000,
+            draw_time * 1000,
             lighting_time * 1000,
         )
 
