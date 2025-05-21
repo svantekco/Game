@@ -61,3 +61,20 @@ class Style(Enum):
     NORMAL = auto()
     BOLD = auto()
     UNDERLINE = auto()
+
+
+class Personality(Enum):
+    """Villager personality traits."""
+
+    BRAVE = auto()
+    LAZY = auto()
+    INDUSTRIOUS = auto()
+    SOCIAL = auto()
+
+
+class Mood(Enum):
+    """Villager mood levels."""
+
+    HAPPY = auto()
+    NEUTRAL = auto()
+    SAD = auto()

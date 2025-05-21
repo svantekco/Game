@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING
 
-from .constants import Color, TileType, STATUS_PANEL_Y
+from .constants import Color, TileType, STATUS_PANEL_Y, Mood
 
 if TYPE_CHECKING:  # pragma: no cover - imports for type hints only
     from .map import GameMap
@@ -231,6 +231,14 @@ class Renderer:
             if 0 <= sy < len(glyph_grid) and 0 <= sx < len(glyph_grid[0]):
                 glyph_grid[sy][sx] = "@"
                 color_grid[sy][sx] = Color.UI
+                mood_char = {
+                    Mood.HAPPY: "^",
+                    Mood.NEUTRAL: "~",
+                    Mood.SAD: "v",
+                }.get(vill.mood, "~")
+                if sx + 1 < len(glyph_grid[0]):
+                    glyph_grid[sy][sx + 1] = mood_char
+                    color_grid[sy][sx + 1] = Color.UI
 
         self.draw_grid(glyph_grid, color_grid)
 
