@@ -97,11 +97,38 @@ def _step_cost(
     return 0.5 if _is_road(pos, buildings) else 1.0
 
 
+def _nearest_passable(
+    start: Tuple[int, int], gmap: GameMap, search_limit: int = SEARCH_LIMIT
+) -> Tuple[int, int]:
+    """Return ``start`` if passable else the closest passable tile."""
+    if gmap.get_tile(*start).passable:
+        return start
+
+    from collections import deque
+
+    q = deque([start])
+    visited = {start}
+    explored = 0
+    while q and explored < search_limit:
+        x, y = q.popleft()
+        explored += 1
+        for n in _neighbors((x, y), gmap):
+            if n in visited:
+                continue
+            visited.add(n)
+            if gmap.get_tile(*n).passable:
+                return n
+            q.append(n)
+    return start
+
+
 def find_path(
     start: Tuple[int, int],
     goal: Tuple[int, int],
     gmap: GameMap,
     buildings: Iterable[object] | None = None,
+    *,
+    search_limit: int = SEARCH_LIMIT,
 ) -> List[Tuple[int, int]]:
     """A* pathfinding from start to goal. Returns list of waypoints."""
 
@@ -115,9 +142,13 @@ def find_path(
     closed: Set[Tuple[int, int]] = set()
     counter = 1
 
+    explored = 0
     while open_heap:
         node = heapq.heappop(open_heap)
         current = node.position
+        explored += 1
+        if explored > search_limit:
+            break
         if current == goal:
             # reconstruct path
             path: List[Tuple[int, int]] = [current]
@@ -203,6 +234,7 @@ def find_path_hierarchical(
     *,
     coarse_distance: int = 50,
     step: int = 4,
+    search_limit: int = SEARCH_LIMIT,
 ) -> List[Tuple[int, int]]:
     """Hierarchical A* pathfinding with a coarse pre-pass.
 
@@ -214,24 +246,38 @@ def find_path_hierarchical(
     if buildings is None:
         buildings = []
 
-    dx = abs(goal[0] - start[0])
-    dy = abs(goal[1] - start[1])
+    start_pass = _nearest_passable(start, gmap, search_limit)
+    goal_pass = _nearest_passable(goal, gmap, search_limit)
+
+    dx = abs(goal_pass[0] - start_pass[0])
+    dy = abs(goal_pass[1] - start_pass[1])
     if max(dx, dy) <= coarse_distance or step <= 1:
-        return find_path(start, goal, gmap, buildings)
+        path = find_path(start_pass, goal_pass, gmap, buildings, search_limit=search_limit)
+        if start_pass != start:
+            prefix = find_path(start, start_pass, gmap, buildings, search_limit=search_limit)
+            if prefix:
+                path = prefix[:-1] + path
+        if goal_pass != goal:
+            suffix = find_path(goal_pass, goal, gmap, buildings, search_limit=search_limit)
+            if suffix:
+                path = path + suffix[1:]
+        return path
 
     scaled = _ScaledMap(gmap, step)
-    coarse_start = (start[0] // step, start[1] // step)
-    coarse_goal = (goal[0] // step, goal[1] // step)
+    coarse_start = (start_pass[0] // step, start_pass[1] // step)
+    coarse_goal = (goal_pass[0] // step, goal_pass[1] // step)
 
-    coarse_path = find_path(coarse_start, coarse_goal, scaled, buildings)
+    coarse_path = find_path(
+        coarse_start, coarse_goal, scaled, buildings, search_limit=search_limit
+    )
     if not coarse_path:
         return []
 
     path: List[Tuple[int, int]] = []
-    current = start
+    current = start_pass
     for cp in coarse_path[1:]:
         target = (cp[0] * step, cp[1] * step)
-        segment = find_path(current, target, gmap, buildings)
+        segment = find_path(current, target, gmap, buildings, search_limit=search_limit)
         if not segment:
             return []
         if path and segment[0] == path[-1]:
@@ -240,7 +286,7 @@ def find_path_hierarchical(
             path.extend(segment)
         current = target
 
-    final_segment = find_path(current, goal, gmap, buildings)
+    final_segment = find_path(current, goal_pass, gmap, buildings, search_limit=search_limit)
     if not final_segment:
         return []
     if path and final_segment[0] == path[-1]:
@@ -248,6 +294,14 @@ def find_path_hierarchical(
     else:
         path.extend(final_segment)
 
+    if start_pass != start:
+        prefix = find_path(start, start_pass, gmap, buildings, search_limit=search_limit)
+        if prefix:
+            path = prefix[:-1] + path
+    if goal_pass != goal:
+        suffix = find_path(goal_pass, goal, gmap, buildings, search_limit=search_limit)
+        if suffix:
+            path = path + suffix[1:]
     return path
 
 
@@ -256,6 +310,8 @@ def find_path_to_building_adjacent(
     building: object,
     gmap: GameMap,
     buildings: Iterable[object] | None = None,
+    *,
+    search_limit: int = SEARCH_LIMIT,
 ) -> List[Tuple[int, int]]:
     """Return a path to a passable tile adjacent to ``building``."""
 
@@ -277,7 +333,7 @@ def find_path_to_building_adjacent(
 
     best: List[Tuple[int, int]] = []
     for cand in candidates:
-        path = find_path(start, cand, gmap, buildings)
+        path = find_path(start, cand, gmap, buildings, search_limit=search_limit)
         if path and (not best or len(path) < len(best)):
             best = path
 

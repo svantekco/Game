@@ -16,7 +16,11 @@ from .constants import (
     VILLAGER_ACTION_DELAY,
     LifeStage,
 )
-from .pathfinding import find_nearest_resource, find_path
+from .pathfinding import (
+    find_nearest_resource,
+    find_path,
+    find_path_to_building_adjacent,
+)
 
 
 @dataclass
@@ -52,7 +56,7 @@ class Villager:
             if b.blueprint.name == "Blacksmith" and b.complete:
                 bx, by = b.position
                 if abs(bx - self.position[0]) <= 5 and abs(by - self.position[1]) <= 5:
-                    return max(1, delay // 2)
+                    return max(0, delay // 2)
         return delay
 
     def _personality_delay_factor(self) -> float:
@@ -86,7 +90,7 @@ class Villager:
             * self._mood_delay_factor()
             * self._life_stage_delay_factor()
         )
-        return max(1, delay)
+        return max(0, delay)
 
     def adjust_mood(self, delta: int) -> None:
         levels = [Mood.SAD, Mood.NEUTRAL, Mood.HAPPY]
@@ -176,7 +180,13 @@ class Villager:
             self.target_building = None
             if self.home and self.position != self.home:
                 if not self.target_path:
-                    path = find_path(self.position, self.home, game.map, game.buildings)
+                    path = find_path(
+                        self.position,
+                        self.home,
+                        game.map,
+                        game.buildings,
+                        search_limit=game.get_search_limit(),
+                    )
                     self.target_path = path[1:]
                 self._move_step(game)
             else:
@@ -227,11 +237,12 @@ class Villager:
                 return
             if job.type == "build":
                 self.target_building = job.payload
-                path = find_path(
+                path = find_path_to_building_adjacent(
                     self.position,
-                    self.target_building.position,
+                    self.target_building,
                     game.map,
                     game.buildings,
+                    search_limit=game.get_search_limit(),
                 )
                 self.target_path = path[1:]
                 self.state = "build"
@@ -266,7 +277,11 @@ class Villager:
             if not self.target_path:
                 self.target_storage = game.nearest_storage(self.position)
                 path = find_path(
-                    self.position, self.target_storage, game.map, game.buildings
+                    self.position,
+                    self.target_storage,
+                    game.map,
+                    game.buildings,
+                    search_limit=game.get_search_limit(),
                 )
                 self.target_path = path[1:]
             if self._move_step(game):
@@ -282,7 +297,11 @@ class Villager:
         if self.state == "build":
             if self._move_step(game):
                 return
-            if self.target_building and self.position == self.target_building.position:
+            if self.target_building and (
+                abs(self.position[0] - self.target_building.position[0])
+                + abs(self.position[1] - self.target_building.position[1])
+                == 1
+            ):
                 self.target_building.progress += 1
                 self.adjust_mood(1)
                 self.cooldown = self._action_delay(game, VILLAGER_ACTION_DELAY)
