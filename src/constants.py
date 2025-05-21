@@ -44,7 +44,7 @@ MAX_STORAGE = 100
 
 # Maximum nodes explored during breadth-first searches to avoid hangs on
 # extremely large maps.
-SEARCH_LIMIT = 10000
+SEARCH_LIMIT = 1000
 
 # Fixed colour for all UI elements (RGB)
 UI_COLOR_RGB = (255, 255, 255)
