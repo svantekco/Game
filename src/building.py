@@ -35,6 +35,11 @@ class Building:
     efficiency: float = 1.0
     builder_id: int | None = None
 
+    def __post_init__(self) -> None:
+        """Initialise stats from the blueprint."""
+        self.capacity = self.blueprint.capacity
+        self.efficiency = self.blueprint.efficiency
+
     # ---------------------------------------------------------------
     def upgrade_cost(self) -> Tuple[int, int]:
         """Return wood and stone cost for the next upgrade."""
