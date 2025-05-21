@@ -5,7 +5,7 @@ import time
 import logging
 from typing import TYPE_CHECKING
 
-from .constants import Color, TileType, STATUS_PANEL_Y, Mood
+from .constants import Color, TileType, STATUS_PANEL_Y, Mood, ZoneType, UI_COLOR_RGB
 from .filters import apply_lighting, day_night_filter, zone_filter
 
 logger = logging.getLogger(__name__)
@@ -32,6 +32,7 @@ if TYPE_CHECKING:  # pragma: no cover - import types for checking only
 class Renderer:
     """Basic terminal renderer using blessed with a curses fallback."""
 
+    UI_RGB = UI_COLOR_RGB
     COLOR_ATTRS = {
         Color.GRASS: "green",
         Color.TREE: "yellow",
@@ -39,7 +40,7 @@ class Renderer:
         Color.WATER: "blue",
         Color.PATH: "cyan",
         Color.BUILDING: "magenta",
-        Color.UI: "white",
+        # UI colour is handled separately to avoid lighting effects.
         # Zone overlays use a bold variant of the base tile colour so
         # the underlying terrain remains recognisable while still
         # highlighting the designated zone.
@@ -117,6 +118,11 @@ class Renderer:
                         elif isinstance(color, tuple):
                             if hasattr(self.term, "color_rgb"):
                                 out.append(move + self.term.color_rgb(*color) + ch)
+                            else:
+                                out.append(move + ch)
+                        elif color is Color.UI:
+                            if hasattr(self.term, "color_rgb"):
+                                out.append(move + self.term.color_rgb(*self.UI_RGB) + ch)
                             else:
                                 out.append(move + ch)
                         else:
@@ -295,7 +301,8 @@ class Renderer:
             self.term.addstr(STATUS_PANEL_Y, 0, line[:width])
             self.term.refresh()
         else:
-            sys.stdout.write(self.term.move_xy(0, STATUS_PANEL_Y) + line)
+            prefix = self.term.color_rgb(*self.UI_RGB) if hasattr(self.term, "color_rgb") else ""
+            sys.stdout.write(self.term.move_xy(0, STATUS_PANEL_Y) + prefix + line)
             sys.stdout.flush()
 
     def render_help(self, lines: list[str], start_y: int = 0) -> None:
@@ -311,7 +318,8 @@ class Renderer:
             if self.use_curses:
                 self.term.addstr(y, 0, line[:width])
             else:
-                sys.stdout.write(self.term.move_xy(0, y) + line)
+                prefix = self.term.color_rgb(*self.UI_RGB) if hasattr(self.term, "color_rgb") else ""
+                sys.stdout.write(self.term.move_xy(0, y) + prefix + line)
         if self.use_curses:
             self.term.refresh()
         else:
@@ -330,7 +338,8 @@ class Renderer:
             if self.use_curses:
                 self.term.addstr(y, 0, line[:width])
             else:
-                sys.stdout.write(self.term.move_xy(0, y) + line)
+                prefix = self.term.color_rgb(*self.UI_RGB) if hasattr(self.term, "color_rgb") else ""
+                sys.stdout.write(self.term.move_xy(0, y) + prefix + line)
         if self.use_curses:
             self.term.refresh()
         else:
