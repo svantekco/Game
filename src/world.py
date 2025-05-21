@@ -6,8 +6,9 @@ class World:
 
     def __init__(self, tick_rate: int, day_length: int | None = None) -> None:
         self.tick_rate = tick_rate
-        # Default day length shortened so time of day advances faster
-        self.day_length = day_length or tick_rate * 6
+        # Default day length slowed down so in-game time progresses
+        # at a more relaxed pace (roughly four times slower than before)
+        self.day_length = day_length or tick_rate * 24
         self.tick_count = 0
         self.day = 0
 
