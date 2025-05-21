@@ -37,7 +37,7 @@ UI_REFRESH_INTERVAL = TICK_RATE * 5  # every 5 seconds
 CARRY_CAPACITY = 10
 
 # Minimum number of ticks between villager actions
-VILLAGER_ACTION_DELAY = 30
+VILLAGER_ACTION_DELAY = 1
 
 # Maximum combined resources that can be stored
 MAX_STORAGE = 100

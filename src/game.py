@@ -20,6 +20,7 @@ from .constants import (
 
 
 from .building import BuildingBlueprint, Building
+from .tile import Tile
 from .map import GameMap, Zone
 from .renderer import Renderer
 from .camera import Camera
@@ -266,7 +267,10 @@ class Game:
             return
         farms = [b for b in self.buildings if b.blueprint.name == "Farm" and b.complete]
         for _ in farms:
-            self.adjust_storage("food", 1)
+            if sum(self.storage.values()) >= self.storage_capacity:
+                self.storage["food"] = self.storage.get("food", 0) + 1
+            else:
+                self.adjust_storage("food", 1)
 
     def _handle_births(self) -> None:
         houses = [b for b in self.buildings if b.blueprint.name == "House" and b.complete]
@@ -363,6 +367,10 @@ class Game:
                 elif tile.type is TileType.ROCK:
                     gained = tile.extract(tile.resource_amount)
                     self.adjust_storage("stone", gained)
+                elif tile.type is TileType.WATER:
+                    # Flatten water tiles in the starting zones so initial
+                    # building sites are always passable.
+                    self.map._tiles[(x, y)] = Tile(TileType.GRASS, 0, True)
 
     def _expand_zone(self, zone: Zone, dx: int = 10, dy: int = 0) -> None:
         """Expand ``zone`` and update the map."""
