@@ -202,7 +202,7 @@ class Game:
             b for b in self.buildings if b.blueprint.name == "House" and b.complete
         ]
         for house in houses:
-            if len(house.residents) < 2:
+            if len(house.residents) < house.capacity:
                 house.residents.append(villager.id)
                 villager.home = house.position
                 break
@@ -274,13 +274,13 @@ class Game:
 
     def _handle_births(self) -> None:
         houses = [b for b in self.buildings if b.blueprint.name == "House" and b.complete]
-        capacity = len(houses) * 2
+        capacity = sum(h.capacity for h in houses)
         if len(self.entities) >= capacity:
             return
         if self.storage.get("food", 0) <= 0:
             return
         for house in houses:
-            if len(house.residents) < 2:
+            if len(house.residents) < house.capacity:
                 self.storage["food"] -= 1
                 self.schedule_spawn(house.position, delay=0, age=0, stage=LifeStage.CHILD)
                 self.log_event("A child is born")
@@ -538,6 +538,39 @@ class Game:
                 self._upgrade_building(b)
                 break
 
+    def _plan_townhall_progress(self) -> None:
+        """Enqueue buildings and upgrades required for the next Town Hall level."""
+        th = self._townhall()
+        reqs = self._townhall_requirements()
+        # Build additional structures if counts are too low
+        for name, (count, level) in reqs.items():
+            built = [b for b in self.buildings if b.blueprint.name == name]
+            bp = self.blueprints[name]
+            if len(built) < count:
+                if (
+                    self.storage["wood"] >= bp.wood
+                    and self.storage["stone"] >= bp.stone
+                    and not any(b.blueprint.name == name for b in self.build_queue)
+                ):
+                    zone_type = ZoneType.HOUSING if name == "House" else ZoneType.WORK
+                    zone = self.zones.get(zone_type)
+                    pos = self.find_build_site(bp, zone)
+                    if pos is None and zone is not None:
+                        self._expand_zone(zone)
+                        pos = self.find_build_site(bp, zone)
+                    if pos:
+                        self.storage["wood"] -= bp.wood
+                        self.storage["stone"] -= bp.stone
+                        building = Building(bp, pos)
+                        self.build_queue.append(building)
+                        self.buildings.append(building)
+                        self._assign_builder(building)
+                        return
+            for b in built:
+                if b.level < level and self._can_upgrade(b):
+                    self._upgrade_building(b)
+                    return
+
     def _next_upgrade_hint(self) -> List[str]:
         th = self._townhall()
         lines: List[str] = []
@@ -554,6 +587,30 @@ class Game:
         else:
             lines.append("TownHall ready to upgrade")
         return lines
+
+    def _expand_housing(self) -> None:
+        """Construct additional houses when population hits capacity."""
+        house_bp = self.blueprints["House"]
+        houses = len([b for b in self.buildings if b.blueprint.name == "House"])
+        if (
+            self.storage["wood"] >= house_bp.wood
+            and self.storage["stone"] >= house_bp.stone
+            and self.storage["wood"] > self.house_threshold
+            and len(self.entities) >= houses * house_bp.capacity
+            and not any(b.blueprint.name == "House" for b in self.build_queue)
+        ):
+            zone = self.zones.get(ZoneType.HOUSING)
+            pos = self.find_build_site(house_bp, zone)
+            if pos is None and zone is not None:
+                self._expand_zone(zone)
+                pos = self.find_build_site(house_bp, zone)
+            if pos:
+                self.storage["wood"] -= house_bp.wood
+                self.storage["stone"] -= house_bp.stone
+                building = Building(house_bp, pos)
+                self.build_queue.append(building)
+                self.buildings.append(building)
+                self._assign_builder(building)
 
     # --- Game Loop -----------------------------------------------------
     def run(self, show_fps: bool = False) -> None:
@@ -687,112 +744,8 @@ class Game:
         self._plan_roads()
         self._produce_food()
         self._auto_upgrade()
-
-        # Prioritise building a Quarry when possible
-        quarry_bp = self.blueprints["Quarry"]
-        if (
-            self.storage["wood"] >= quarry_bp.wood
-            and self.storage["stone"] >= quarry_bp.stone
-            and not any(b.blueprint.name == "Quarry" for b in self.build_queue)
-            and not any(b.blueprint.name == "Quarry" for b in self.buildings)
-        ):
-            pos = self.find_quarry_site(quarry_bp)
-            if pos:
-                self.storage["wood"] -= quarry_bp.wood
-                self.storage["stone"] -= quarry_bp.stone
-                building = Building(quarry_bp, pos)
-                self.build_queue.append(building)
-                self.buildings.append(building)
-                self._assign_builder(building)
-
-        # Build additional storage when nearing capacity
-        storage_bp = self.blueprints["Storage"]
-        total = sum(self.storage.values())
-        if (
-            total >= self.storage_capacity - 20
-            and self.storage["wood"] >= storage_bp.wood
-            and self.storage["stone"] >= storage_bp.stone
-            and not any(b.blueprint.name == "Storage" for b in self.build_queue)
-        ):
-            zone = self.zones.get(ZoneType.WORK)
-            pos = self.find_build_site(storage_bp, zone)
-            if pos is None and zone is not None:
-                self._expand_zone(zone)
-                pos = self.find_build_site(storage_bp, zone)
-            if pos:
-                self.storage["wood"] -= storage_bp.wood
-                self.storage["stone"] -= storage_bp.stone
-                building = Building(storage_bp, pos, progress=0)
-                building.progress = storage_bp.build_time
-                building.passable = True
-                self.buildings.append(building)
-                self.storage_capacity += MAX_STORAGE
-                self.storage_pos = pos
-                self.storage_positions.append(pos)
-
-        # Auto-enqueue Lumberyards when resources allow and none are pending
-        lumber_bp = self.blueprints["Lumberyard"]
-        if (
-            self.storage["wood"] >= lumber_bp.wood
-            and self.storage["stone"] >= lumber_bp.stone
-            and not any(b.blueprint.name == "Lumberyard" for b in self.build_queue)
-            and not any(b.blueprint.name == "Lumberyard" for b in self.buildings)
-        ):
-            zone = self.zones.get(ZoneType.WORK)
-            pos = self.find_build_site(lumber_bp, zone)
-            if pos is None and zone is not None:
-                self._expand_zone(zone)
-                pos = self.find_build_site(lumber_bp, zone)
-            if pos:
-                self.storage["wood"] -= lumber_bp.wood
-                self.storage["stone"] -= lumber_bp.stone
-                building = Building(lumber_bp, pos)
-                self.build_queue.append(building)
-                self.buildings.append(building)
-                self._assign_builder(building)
-
-        # Build a Blacksmith when resources allow and none exist
-        black_bp = self.blueprints.get("Blacksmith")
-        if black_bp and (
-            self.storage["wood"] >= black_bp.wood
-            and self.storage["stone"] >= black_bp.stone
-            and not any(b.blueprint.name == "Blacksmith" for b in self.build_queue)
-            and not any(b.blueprint.name == "Blacksmith" for b in self.buildings)
-        ):
-            zone = self.zones.get(ZoneType.WORK)
-            pos = self.find_build_site(black_bp, zone)
-            if pos is None and zone is not None:
-                self._expand_zone(zone)
-                pos = self.find_build_site(black_bp, zone)
-            if pos:
-                self.storage["wood"] -= black_bp.wood
-                self.storage["stone"] -= black_bp.stone
-                building = Building(black_bp, pos)
-                self.build_queue.append(building)
-                self.buildings.append(building)
-                self._assign_builder(building)
-
-        # House expansion and population growth
-        house_bp = self.blueprints["House"]
-        houses = len([b for b in self.buildings if b.blueprint.name == "House"])
-        if (
-            self.storage["wood"] >= house_bp.wood
-            and self.storage["stone"] >= house_bp.stone
-            and self.storage["wood"] > self.house_threshold
-            and len(self.entities) >= houses * 2
-        ):
-            zone = self.zones.get(ZoneType.HOUSING)
-            pos = self.find_build_site(house_bp, zone)
-            if pos is None and zone is not None:
-                self._expand_zone(zone)
-                pos = self.find_build_site(house_bp, zone)
-            if pos:
-                self.storage["wood"] -= house_bp.wood
-                self.storage["stone"] -= house_bp.stone
-                building = Building(house_bp, pos)
-                self.build_queue.append(building)
-                self.buildings.append(building)
-                self._assign_builder(building)
+        self._plan_townhall_progress()
+        self._expand_housing()
 
     def render(self) -> None:
         """Draw the current game state."""
