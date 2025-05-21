@@ -5,7 +5,7 @@ import time
 import logging
 from typing import TYPE_CHECKING
 
-from .constants import Color, TileType, STATUS_PANEL_Y, Mood, ZoneType, UI_COLOR_RGB
+from .constants import Color, TileType, STATUS_PANEL_Y, Mood, UI_COLOR_RGB
 from .filters import apply_lighting, day_night_filter, zone_filter
 
 logger = logging.getLogger(__name__)
@@ -103,34 +103,46 @@ class Renderer:
                         self.term.addstr(y, x, ch)
             self.term.refresh()
         else:
+
+            def apply_color(text: str, color: object | None) -> str:
+                if color is None:
+                    return text
+                if isinstance(color, tuple):
+                    if hasattr(self.term, "color_rgb"):
+                        return self.term.color_rgb(*color) + text
+                    return text
+                if color is Color.UI:
+                    if hasattr(self.term, "color_rgb"):
+                        return self.term.color_rgb(*self.UI_RGB) + text
+                    return text
+                attr = self.COLOR_ATTRS.get(color)
+                if attr and hasattr(self.term, attr):
+                    return getattr(self.term, attr)(text)
+                return text
+
             out: list[str] = []
             for y, row in enumerate(glyphs):
-                for x, ch in enumerate(row):
+                color_row = colors[y]
+                if not full_redraw and self._last_glyphs is not None:
                     if (
-                        full_redraw
-                        or self._last_glyphs[y][x] != ch
-                        or self._last_colors[y][x] != colors[y][x]
+                        row == self._last_glyphs[y]
+                        and color_row == self._last_colors[y]
                     ):
-                        color = colors[y][x]
-                        move = self.term.move_xy(x, y)
-                        if color is None:
-                            out.append(move + ch)
-                        elif isinstance(color, tuple):
-                            if hasattr(self.term, "color_rgb"):
-                                out.append(move + self.term.color_rgb(*color) + ch)
-                            else:
-                                out.append(move + ch)
-                        elif color is Color.UI:
-                            if hasattr(self.term, "color_rgb"):
-                                out.append(move + self.term.color_rgb(*self.UI_RGB) + ch)
-                            else:
-                                out.append(move + ch)
-                        else:
-                            attr = self.COLOR_ATTRS.get(color)
-                            if attr and hasattr(self.term, attr):
-                                out.append(move + getattr(self.term, attr)(ch))
-                            else:
-                                out.append(move + ch)
+                        continue
+
+                segments: list[str] = []
+                start = 0
+                current_color = color_row[0]
+                for x, color in enumerate(color_row):
+                    if color != current_color:
+                        segment = "".join(row[start:x])
+                        segments.append(apply_color(segment, current_color))
+                        start = x
+                        current_color = color
+                segment = "".join(row[start:])
+                segments.append(apply_color(segment, current_color))
+                out.append(self.term.move_xy(0, y) + "".join(segments))
+
             sys.stdout.write("".join(out))
             sys.stdout.flush()
 
@@ -322,7 +334,11 @@ class Renderer:
             self.term.addstr(STATUS_PANEL_Y, 0, line[:width])
             self.term.refresh()
         else:
-            prefix = self.term.color_rgb(*self.UI_RGB) if hasattr(self.term, "color_rgb") else ""
+            prefix = (
+                self.term.color_rgb(*self.UI_RGB)
+                if hasattr(self.term, "color_rgb")
+                else ""
+            )
             sys.stdout.write(self.term.move_xy(0, STATUS_PANEL_Y) + prefix + line)
             sys.stdout.flush()
 
@@ -339,7 +355,11 @@ class Renderer:
             if self.use_curses:
                 self.term.addstr(y, 0, line[:width])
             else:
-                prefix = self.term.color_rgb(*self.UI_RGB) if hasattr(self.term, "color_rgb") else ""
+                prefix = (
+                    self.term.color_rgb(*self.UI_RGB)
+                    if hasattr(self.term, "color_rgb")
+                    else ""
+                )
                 sys.stdout.write(self.term.move_xy(0, y) + prefix + line)
         if self.use_curses:
             self.term.refresh()
@@ -359,7 +379,11 @@ class Renderer:
             if self.use_curses:
                 self.term.addstr(y, 0, line[:width])
             else:
-                prefix = self.term.color_rgb(*self.UI_RGB) if hasattr(self.term, "color_rgb") else ""
+                prefix = (
+                    self.term.color_rgb(*self.UI_RGB)
+                    if hasattr(self.term, "color_rgb")
+                    else ""
+                )
                 sys.stdout.write(self.term.move_xy(0, y) + prefix + line)
         if self.use_curses:
             self.term.refresh()
