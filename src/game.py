@@ -20,7 +20,11 @@ from .constants import (
     Personality,
     Mood,
 )
-from .pathfinding import find_nearest_resource, find_path
+from .pathfinding import (
+    find_nearest_resource,
+    find_path,
+    find_path_to_building_adjacent,
+)
 from .building import BuildingBlueprint, Building
 
 from .map import GameMap
@@ -110,6 +114,12 @@ class Villager:
         self.cooldown = self._action_delay(game, delay)
         return True
 
+    def _adjacent_to_building(self, building: Building) -> bool:
+        for bx, by in building.cells():
+            if abs(self.position[0] - bx) + abs(self.position[1] - by) == 1:
+                return True
+        return False
+
     def thought(self, game: "Game") -> str:
         """Return a short description of the villager's current intention."""
         if self.cooldown > 0:
@@ -134,7 +144,7 @@ class Villager:
             return "Stuck: no path to storage"
         if self.state == "build":
             if self.target_building:
-                if self.position == self.target_building.position:
+                if self._adjacent_to_building(self.target_building):
                     return f"Building {self.target_building.blueprint.name}"
                 if self.target_path:
                     return (
@@ -181,9 +191,9 @@ class Villager:
                 return
             if job.type == "build":
                 self.target_building = job.payload
-                path = find_path(
+                path = find_path_to_building_adjacent(
                     self.position,
-                    self.target_building.position,
+                    self.target_building,
                     game.map,
                     game.buildings,
                 )
@@ -240,23 +250,33 @@ class Villager:
                 self.state = "idle"
 
         if self.state == "build":
-            if self._move_step(game):
-                return
-            if self.target_building and self.position == self.target_building.position:
-                self.target_building.progress += 1
-                self.adjust_mood(1)
-                self.cooldown = self._action_delay(game, VILLAGER_ACTION_DELAY)
-                if self.target_building.complete:
-                    self.target_building.passable = False
-                    if self.target_building in game.build_queue:
-                        game.build_queue.remove(self.target_building)
-                    if self.target_building.blueprint.name == "House":
-                        game.schedule_spawn(self.target_building.position)
-                else:
-                    # Requeue the build job until construction is finished
-                    game.jobs.append(Job("build", self.target_building))
+            if not self.target_building:
                 self.state = "idle"
-
+                return
+            if not self._adjacent_to_building(self.target_building):
+                if self._move_step(game):
+                    return
+                if not self.target_path:
+                    path = find_path_to_building_adjacent(
+                        self.position,
+                        self.target_building,
+                        game.map,
+                        game.buildings,
+                    )
+                    self.target_path = path[1:]
+                return
+            # Adjacent to building: work on it
+            self.target_building.progress += 1
+            self.adjust_mood(1)
+            self.cooldown = self._action_delay(game, VILLAGER_ACTION_DELAY)
+            if self.target_building.complete:
+                self.target_building.passable = False
+                if self.target_building in game.build_queue:
+                    game.build_queue.remove(self.target_building)
+                if self.target_building.blueprint.name == "House":
+                    game.schedule_spawn(self.target_building.position)
+                self.state = "idle"
+            
     @property
     def x(self) -> int:
         return self.position[0]
