@@ -14,6 +14,7 @@ from .constants import (
     Personality,
     TileType,
     VILLAGER_ACTION_DELAY,
+    LifeStage,
 )
 from .pathfinding import find_nearest_resource, find_path
 
@@ -39,6 +40,8 @@ class Villager:
     mood: Mood = Mood.NEUTRAL
     home: Optional[Tuple[int, int]] = None
     asleep: bool = False
+    age: int = 18
+    life_stage: LifeStage = LifeStage.ADULT
 
     # ---------------------------------------------------------------
     def is_full(self) -> bool:
@@ -66,10 +69,22 @@ class Villager:
             return 1.1
         return 1.0
 
+    def _life_stage_delay_factor(self) -> float:
+        if self.life_stage is LifeStage.CHILD:
+            return 1.5
+        if self.life_stage is LifeStage.ELDER:
+            return 1.2
+        if self.life_stage is LifeStage.RETIRED:
+            return 2.0
+        return 1.0
+
     def _action_delay(self, game: "Game", base_delay: int) -> int:
         delay = self._apply_tool_bonus(game, base_delay)
         delay = int(
-            delay * self._personality_delay_factor() * self._mood_delay_factor()
+            delay
+            * self._personality_delay_factor()
+            * self._mood_delay_factor()
+            * self._life_stage_delay_factor()
         )
         return max(1, delay)
 
@@ -132,6 +147,29 @@ class Villager:
             return "Sleeping"
         return self.state
 
+    # ---------------------------------------------------------------
+    def age_one_day(self, game: "Game") -> None:
+        self.age += 1
+        previous = self.life_stage
+        if self.age < 18:
+            self.life_stage = LifeStage.CHILD
+        elif self.age < 65:
+            self.life_stage = LifeStage.ADULT
+        elif self.age < 80:
+            self.life_stage = LifeStage.ELDER
+        else:
+            self.life_stage = LifeStage.RETIRED
+        if self.life_stage != previous:
+            if self.life_stage is LifeStage.RETIRED:
+                game.log_event(f"Villager {self.id} retired")
+            else:
+                game.log_event(
+                    f"Villager {self.id} became {self.life_stage.name.lower()}"
+                )
+        self.carrying_capacity = (
+            CARRY_CAPACITY if self.life_stage in (LifeStage.ADULT, LifeStage.ELDER) else CARRY_CAPACITY // 2
+        )
+
     def update(self, game: "Game") -> None:
         if game.world.is_night:
             self.target_resource = None
@@ -149,6 +187,12 @@ class Villager:
         if self.asleep:
             self.asleep = False
             self.state = "idle"
+        if self.life_stage is LifeStage.RETIRED:
+            for v in game.entities:
+                if v is not self and abs(v.x - self.x) <= 1 and abs(v.y - self.y) <= 1:
+                    v.adjust_mood(1)
+            self.state = "retired"
+            return
         if self.personality is Personality.SOCIAL:
             if any(
                 v is not self and abs(v.x - self.x) <= 1 and abs(v.y - self.y) <= 1
