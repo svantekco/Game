@@ -105,10 +105,29 @@ class Villager:
         if not self.target_path:
             return False
         next_pos = self.target_path[0]
-        # Avoid stepping onto another villager or newly blocked tile
+        # Avoid collisions with other villagers and maintain spacing
         for v in game.entities:
-            if v is not self and v.position == next_pos:
+            if v is self:
+                continue
+            # Don't move if the target tile is occupied
+            if v.position == next_pos:
+                # If we're trying to swap positions, larger id reroutes
+                if v.target_path and v.target_path[0] == self.position:
+                    if self.id > v.id:
+                        self.target_path = []
+                    else:
+                        v.target_path = []
                 return False
+            # Maintain a 2 tile buffer
+            if max(abs(v.position[0] - next_pos[0]), abs(v.position[1] - next_pos[1])) < 2:
+                return False
+            # If another villager plans to move into our target tile, resolve based on id
+            if v.target_path and v.target_path[0] == next_pos:
+                if self.id > v.id:
+                    self.target_path = []
+                    return False
+                else:
+                    v.target_path = []
         tile = game.map.get_tile(*next_pos)
         if not tile.passable:
             self.target_path = []
@@ -272,12 +291,20 @@ class Villager:
                 resource_type = (
                     job.payload if isinstance(job.payload, TileType) else TileType.TREE
                 )
+                avoid = [
+                    v.target_resource
+                    for v in game.entities
+                    if v is not self
+                    and v.resource_type == resource_type
+                    and v.target_resource is not None
+                ]
                 pos, path = find_nearest_resource(
                     self.position,
                     resource_type,
                     game.map,
                     game.buildings,
                     search_limit=game.get_search_limit(),
+                    avoid=avoid,
                 )
                 if pos is None:
                     self._wander(game)

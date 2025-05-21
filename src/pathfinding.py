@@ -302,11 +302,14 @@ def _nearest_resource_bfs(
     gmap: GameMap,
     buildings: Iterable[object],
     search_limit: int,
+    avoid: Iterable[Tuple[int, int]] | None = None,
 ) -> Tuple[Optional[Tuple[int, int]], List[Tuple[int, int]]]:
     """Fallback BFS search used when clustering fails."""
 
     from collections import deque
 
+    if avoid is None:
+        avoid = []
     q = deque([start])
     came_from: Dict[Tuple[int, int], Tuple[int, int] | None] = {start: None}
     explored = 0
@@ -316,7 +319,14 @@ def _nearest_resource_bfs(
         explored += 1
 
         tile = gmap.get_tile(*current)
-        if tile.type is resource_type and tile.resource_amount > 0:
+        if (
+            tile.type is resource_type
+            and tile.resource_amount > 0
+            and all(
+                max(abs(current[0] - ax), abs(current[1] - ay)) >= 2
+                for ax, ay in avoid
+            )
+        ):
             found = current
             path: List[Tuple[int, int]] = [current]
             while came_from[current] is not None:
@@ -332,6 +342,8 @@ def _nearest_resource_bfs(
                 continue
             if not _is_passable(n, gmap, buildings):
                 continue
+            if any(max(abs(n[0] - ax), abs(n[1] - ay)) < 2 for ax, ay in avoid):
+                continue
             came_from[n] = current
             q.append(n)
 
@@ -346,11 +358,14 @@ def find_nearest_resource(
     *,
     search_limit: int = SEARCH_LIMIT,
     cluster_radius: int = 25,
+    avoid: Iterable[Tuple[int, int]] | None = None,
 ) -> Tuple[Optional[Tuple[int, int]], List[Tuple[int, int]]]:
     """Find the closest tile of ``resource_type`` using cached clusters."""
 
     if buildings is None:
         buildings = []
+    if avoid is None:
+        avoid = []
 
     clusters = _get_clusters(gmap, resource_type, start, cluster_radius)
 
@@ -358,11 +373,17 @@ def find_nearest_resource(
     best_target: Optional[Tuple[int, int]] = None
 
     for cluster in clusters:
-        # pick the closest tile in this cluster
-        candidate = min(
-            cluster,
-            key=lambda p: abs(p[0] - start[0]) + abs(p[1] - start[1]),
-        )
+        options = [
+            p
+            for p in cluster
+            if all(
+                max(abs(p[0] - ax), abs(p[1] - ay)) >= 2
+                for ax, ay in avoid
+            )
+        ]
+        if not options:
+            continue
+        candidate = min(options, key=lambda p: abs(p[0] - start[0]) + abs(p[1] - start[1]))
         path = find_path(start, candidate, gmap, buildings, search_limit=search_limit)
         if path and (not best_path or len(path) < len(best_path)):
             best_path = path
@@ -372,6 +393,10 @@ def find_nearest_resource(
         return best_target, best_path
 
     # Fallback to BFS if no cluster produced a viable path
+    pos, path = _nearest_resource_bfs(start, resource_type, gmap, buildings, search_limit, avoid)
+    if pos is not None:
+        return pos, path
+    # Last resort ignore avoidance
     return _nearest_resource_bfs(start, resource_type, gmap, buildings, search_limit)
 
 
