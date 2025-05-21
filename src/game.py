@@ -343,7 +343,8 @@ class Game:
         q = deque([origin])
         visited = {origin}
         searched = 0
-        while q and searched < SEARCH_LIMIT:
+        limit = SEARCH_LIMIT * 10
+        while q and searched < limit:
             x, y = q.popleft()
             searched += 1
             if self.map.get_tile(x, y).passable:
