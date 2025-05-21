@@ -207,8 +207,9 @@ def find_path_fast(
     return find_path(start, goal, gmap, buildings, search_limit=search_limit)
 
 
-
-def _map_cache(gmap: GameMap) -> Dict[Tuple[TileType, int, int, int], List[List[Tuple[int, int]]]]:
+def _map_cache(
+    gmap: GameMap,
+) -> Dict[Tuple[TileType, int, int, int], List[List[Tuple[int, int]]]]:
     """Return the cluster cache dictionary attached to ``gmap``."""
 
     cache = getattr(gmap, "_cluster_cache", None)
@@ -283,7 +284,15 @@ def _get_clusters(
     cache = _map_cache(gmap)
     key = _cluster_key(gmap, resource, center, radius)
     if key not in cache:
-        cache[key] = _compute_clusters(gmap, resource, center, radius)
+        clusters: List[List[Tuple[int, int]]] = []
+        pre = getattr(getattr(gmap, "precomputed_clusters", None), "get", lambda _: [])(
+            resource
+        )
+        for cx, cy in pre:
+            if abs(cx - center[0]) <= radius * 2 and abs(cy - center[1]) <= radius * 2:
+                clusters.append([(cx, cy)])
+        clusters.extend(_compute_clusters(gmap, resource, center, radius))
+        cache[key] = clusters
     return cache[key]
 
 
@@ -363,9 +372,7 @@ def find_nearest_resource(
         return best_target, best_path
 
     # Fallback to BFS if no cluster produced a viable path
-    return _nearest_resource_bfs(
-        start, resource_type, gmap, buildings, search_limit
-    )
+    return _nearest_resource_bfs(start, resource_type, gmap, buildings, search_limit)
 
 
 def find_path_hierarchical(

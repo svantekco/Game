@@ -18,4 +18,3 @@ def test_road_remains_passable_after_built():
     vill.update(game)
     assert b.complete
     assert b.passable is True
-
