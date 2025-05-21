@@ -28,7 +28,7 @@ DEFAULT_ZOOM_INDEX = 0
 
 # Game tick rate (ticks per second)
 # Reduced to improve smoothness and lower CPU load
-TICK_RATE = 60
+TICK_RATE = 180
 
 # How often to fully refresh the UI to avoid artefacts
 UI_REFRESH_INTERVAL = TICK_RATE * 5  # every 5 seconds
