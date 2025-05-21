@@ -56,6 +56,9 @@ class Color(Enum):
     PATH = auto()
     BUILDING = auto()
     UI = auto()
+    HOUSING_ZONE = auto()
+    WORK_ZONE = auto()
+    MARKET_ZONE = auto()
 
 
 class Style(Enum):
@@ -81,3 +84,11 @@ class Mood(Enum):
     HAPPY = auto()
     NEUTRAL = auto()
     SAD = auto()
+
+
+class ZoneType(Enum):
+    """Designated zones for building placement."""
+
+    HOUSING = auto()
+    WORK = auto()
+    MARKET = auto()

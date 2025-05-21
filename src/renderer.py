@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING
 
-from .constants import Color, TileType, STATUS_PANEL_Y, Mood
+from .constants import Color, TileType, STATUS_PANEL_Y, Mood, ZoneType
 
 if TYPE_CHECKING:  # pragma: no cover - imports for type hints only
     from .map import GameMap
@@ -35,6 +35,9 @@ class Renderer:
         Color.PATH: "cyan",
         Color.BUILDING: "magenta",
         Color.UI: "white",
+        Color.HOUSING_ZONE: "green",
+        Color.WORK_ZONE: "yellow",
+        Color.MARKET_ZONE: "blue",
     }
 
     def __init__(self) -> None:
@@ -117,11 +120,20 @@ class Renderer:
         self._last_colors = [row.copy() for row in colors]
 
     # ------------------------------------------------------------------
-    def _tile_to_render(self, tile: TileType, detailed: bool) -> tuple[str, Color]:
-        """Return a glyph and color for the given tile type."""
+    def _tile_to_render(
+        self, tile: TileType, detailed: bool, zone: ZoneType | None = None
+    ) -> tuple[str, Color]:
+        """Return a glyph and color for the given tile type and zone."""
         if detailed:
             if tile is TileType.GRASS:
-                return ".", Color.GRASS
+                color = Color.GRASS
+                if zone is ZoneType.HOUSING:
+                    color = Color.HOUSING_ZONE
+                elif zone is ZoneType.WORK:
+                    color = Color.WORK_ZONE
+                elif zone is ZoneType.MARKET:
+                    color = Color.MARKET_ZONE
+                return ".", color
             if tile is TileType.TREE:
                 return "t", Color.TREE
             if tile is TileType.ROCK:
@@ -129,7 +141,14 @@ class Renderer:
             return "~", Color.WATER
         else:
             if tile is TileType.GRASS:
-                return "G", Color.GRASS
+                color = Color.GRASS
+                if zone is ZoneType.HOUSING:
+                    color = Color.HOUSING_ZONE
+                elif zone is ZoneType.WORK:
+                    color = Color.WORK_ZONE
+                elif zone is ZoneType.MARKET:
+                    color = Color.MARKET_ZONE
+                return "G", color
             if tile is TileType.TREE:
                 return "T", Color.TREE
             if tile is TileType.ROCK:
@@ -160,9 +179,10 @@ class Renderer:
                 wx = camera.x + tx
                 wy = camera.y + ty
                 tile = gmap.get_tile(wx, wy)
-                glyph, color = self._tile_to_render(tile.type, detailed)
+                glyph, color = self._tile_to_render(tile.type, detailed, tile.zone)
                 if is_night:
                     glyph = glyph.lower()
+                    
                 glyph_row.extend([glyph] * camera.zoom)
                 color_row.extend([color] * camera.zoom)
             for _ in range(camera.zoom):
