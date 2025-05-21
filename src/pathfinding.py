@@ -308,7 +308,22 @@ def _get_clusters(
             if abs(cx - center[0]) <= radius * 2 and abs(cy - center[1]) <= radius * 2:
                 clusters.append([(cx, cy)])
         clusters.extend(_compute_clusters(gmap, resource, center, radius))
+        logger.debug(
+            "_get_clusters computed %d clusters for %s around %s (r=%d)",
+            len(clusters),
+            resource.name,
+            center,
+            radius,
+        )
         cache[key] = clusters
+    else:
+        logger.debug(
+            "_get_clusters using cached clusters (%d) for %s around %s (r=%d)",
+            len(cache[key]),
+            resource.name,
+            center,
+            radius,
+        )
     return cache[key]
 
 
@@ -326,6 +341,13 @@ def _nearest_resource_bfs(
 
     if avoid is None:
         avoid = []
+    logger.debug(
+        "_nearest_resource_bfs start=%s type=%s avoid=%d limit=%d",
+        start,
+        resource_type.name,
+        len(avoid),
+        search_limit,
+    )
     q = deque([start])
     came_from: Dict[Tuple[int, int], Tuple[int, int] | None] = {start: None}
     explored = 0
@@ -348,6 +370,9 @@ def _nearest_resource_bfs(
                 current = came_from[current]  # type: ignore[index]
                 path.append(current)
             path.reverse()
+            logger.debug(
+                "_nearest_resource_bfs found %s after exploring %d", found, explored
+            )
             return found, path
 
         neighbors = list(_neighbors(current, gmap))
@@ -387,6 +412,15 @@ def find_nearest_resource(
     if avoid is None:
         avoid = []
 
+    logger.debug(
+        "find_nearest_resource start=%s type=%s radius=%d avoid=%d limit=%d",
+        start,
+        resource_type.name,
+        cluster_radius,
+        len(avoid),
+        search_limit,
+    )
+
     clusters = _get_clusters(gmap, resource_type, start, cluster_radius)
 
     best_path: List[Tuple[int, int]] = []
@@ -404,9 +438,13 @@ def find_nearest_resource(
             options, key=lambda p: abs(p[0] - start[0]) + abs(p[1] - start[1])
         )
         path = find_path(start, candidate, gmap, buildings, search_limit=search_limit)
-        if path and (not best_path or len(path) < len(best_path)):
-            best_path = path
-            best_target = candidate
+        if path:
+            logger.debug(
+                "cluster candidate %s path length %d", candidate, len(path)
+            )
+            if not best_path or len(path) < len(best_path):
+                best_path = path
+                best_target = candidate
 
     if best_target is not None:
         return best_target, best_path
