@@ -324,6 +324,18 @@ class Villager:
                     self.target_path = []
             return
         if self.state == "deliver":
+            # Immediately deliver if we're already on a storage tile
+            if self.position in game.storage_positions:
+                for res in ("wood", "stone"):
+                    if self.inventory.get(res, 0) > 0:
+                        game.adjust_storage(res, self.inventory.get(res, 0))
+                        self.inventory[res] = 0
+                self.adjust_mood(1)
+                self.cooldown = self._action_delay(game, VILLAGER_ACTION_DELAY)
+                self.state = "idle"
+                self.target_path = []
+                return
+
             if not self.target_path:
                 self.target_storage = game.nearest_storage(self.position)
                 path = path_func(
@@ -338,16 +350,9 @@ class Villager:
                     self.state = "idle"
                     self._wander(game)
                     return
+
             if self._move_step(game):
                 return
-            if self.position in game.storage_positions:
-                for res in ("wood", "stone"):
-                    if self.inventory.get(res, 0) > 0:
-                        game.adjust_storage(res, self.inventory.get(res, 0))
-                        self.inventory[res] = 0
-                self.adjust_mood(1)
-                self.cooldown = self._action_delay(game, VILLAGER_ACTION_DELAY)
-                self.state = "idle"
         if self.state == "build":
             if self._move_step(game):
                 return
