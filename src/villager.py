@@ -296,6 +296,8 @@ class Villager:
                     from .game import Job
 
                     game.jobs.append(Job("build", self.target_building))
+                    # Stay in build state to continue working on the same building
+                    return
                 self.state = "idle"
 
     @property
