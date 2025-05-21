@@ -132,8 +132,10 @@ class Game:
         self.running = False
         # Use a higher tick rate so keyboard input is responsive
         self.tick_rate = TICK_RATE
-        self.tick_count = 0
         self.world = World(self.tick_rate)
+        # Start the simulation at dawn so villagers are awake during tests
+        self.world.tick_count = self.world.day_length // 4
+        self.tick_count = self.world.tick_count
         self.paused = False
         self.single_step = False
         self.show_help = False
