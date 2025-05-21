@@ -6,7 +6,8 @@ class World:
 
     def __init__(self, tick_rate: int, day_length: int | None = None) -> None:
         self.tick_rate = tick_rate
-        self.day_length = day_length or tick_rate * 30
+        # Default day length shortened so time of day advances faster
+        self.day_length = day_length or tick_rate * 6
         self.tick_count = 0
         self.day = 0
 
@@ -19,8 +20,9 @@ class World:
 
     @property
     def is_night(self) -> bool:
-        cycle_pos = self.tick_count % self.day_length
-        return cycle_pos >= self.day_length // 2
+        """Return True if time is between 00:00 and 03:00."""
+        hour = int(self.day_fraction * 24)
+        return hour < 3
 
     @property
     def time_of_day(self) -> str:

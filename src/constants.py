@@ -27,8 +27,8 @@ ZOOM_LEVELS = [1, 2, 4]
 DEFAULT_ZOOM_INDEX = 0
 
 # Game tick rate (ticks per second)
-# Lowered so the simulation runs at a calmer pace
-TICK_RATE = 60
+# Lowered to reduce CPU usage
+TICK_RATE = 30
 
 # How often to fully refresh the UI to avoid artefacts
 UI_REFRESH_INTERVAL = TICK_RATE * 5  # every 5 seconds
