@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
 
 from .constants import (
@@ -14,16 +14,9 @@ from .constants import (
     MAX_STORAGE,
     SEARCH_LIMIT,
     STATUS_PANEL_Y,
-    Personality,
-    Mood,
     ZoneType,
 )
 
-from .pathfinding import (
-    find_nearest_resource,
-    find_path,
-    find_path_to_building_adjacent,
-)
 
 from .building import BuildingBlueprint, Building
 from .map import GameMap, Zone
@@ -31,6 +24,8 @@ from .renderer import Renderer
 from .camera import Camera
 from .villager import Villager
 from .world import World
+
+
 @dataclass
 class Job:
     """Simple job descriptor used by the dispatcher."""
@@ -240,7 +235,7 @@ class Game:
             self.adjust_storage("food", 1)
 
     def _find_start_pos(self) -> Tuple[int, int]:
-        """Find the nearest passable tile to start the village on."""
+        """Find a suitable starting tile with nearby resources."""
         origin = (self.map.width // 2, self.map.height // 2)
         from collections import deque
 
@@ -251,7 +246,10 @@ class Game:
             x, y = q.popleft()
             searched += 1
             if self.map.get_tile(x, y).passable:
-                return (x, y)
+                trees = self._count_resource_nearby((x, y), TileType.TREE, radius=10)
+                rocks = self._count_resource_nearby((x, y), TileType.ROCK, radius=10)
+                if trees >= 5 and rocks >= 5:
+                    return (x, y)
             for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
                 nx, ny = x + dx, y + dy
                 if (

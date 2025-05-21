@@ -35,9 +35,12 @@ class Renderer:
         Color.PATH: "cyan",
         Color.BUILDING: "magenta",
         Color.UI: "white",
-        Color.HOUSING_ZONE: "green",
-        Color.WORK_ZONE: "yellow",
-        Color.MARKET_ZONE: "blue",
+        # Zone overlays use a bold variant of the base tile colour so
+        # the underlying terrain remains recognisable while still
+        # highlighting the designated zone.
+        Color.HOUSING_ZONE: "bold_green",
+        Color.WORK_ZONE: "bold_yellow",
+        Color.MARKET_ZONE: "bold_blue",
     }
 
     def __init__(self) -> None:
@@ -126,34 +129,33 @@ class Renderer:
         """Return a glyph and color for the given tile type and zone."""
         if detailed:
             if tile is TileType.GRASS:
-                color = Color.GRASS
-                if zone is ZoneType.HOUSING:
-                    color = Color.HOUSING_ZONE
-                elif zone is ZoneType.WORK:
-                    color = Color.WORK_ZONE
-                elif zone is ZoneType.MARKET:
-                    color = Color.MARKET_ZONE
-                return ".", color
-            if tile is TileType.TREE:
-                return "t", Color.TREE
-            if tile is TileType.ROCK:
-                return "^", Color.ROCK
-            return "~", Color.WATER
+                glyph, color = ".", Color.GRASS
+            elif tile is TileType.TREE:
+                glyph, color = "t", Color.TREE
+            elif tile is TileType.ROCK:
+                glyph, color = "^", Color.ROCK
+            else:
+                glyph, color = "~", Color.WATER
         else:
             if tile is TileType.GRASS:
-                color = Color.GRASS
-                if zone is ZoneType.HOUSING:
-                    color = Color.HOUSING_ZONE
-                elif zone is ZoneType.WORK:
-                    color = Color.WORK_ZONE
-                elif zone is ZoneType.MARKET:
-                    color = Color.MARKET_ZONE
-                return "G", color
-            if tile is TileType.TREE:
-                return "T", Color.TREE
-            if tile is TileType.ROCK:
-                return "R", Color.ROCK
-            return "W", Color.WATER
+                glyph, color = "G", Color.GRASS
+            elif tile is TileType.TREE:
+                glyph, color = "T", Color.TREE
+            elif tile is TileType.ROCK:
+                glyph, color = "R", Color.ROCK
+            else:
+                glyph, color = "W", Color.WATER
+
+        # Apply zone overlay colour regardless of base tile type so
+        # zones remain visible on trees, rocks and water tiles.
+        if zone is ZoneType.HOUSING:
+            color = Color.HOUSING_ZONE
+        elif zone is ZoneType.WORK:
+            color = Color.WORK_ZONE
+        elif zone is ZoneType.MARKET:
+            color = Color.MARKET_ZONE
+
+        return glyph, color
 
     def render_game(
         self,
@@ -182,7 +184,7 @@ class Renderer:
                 glyph, color = self._tile_to_render(tile.type, detailed, tile.zone)
                 if is_night:
                     glyph = glyph.lower()
-                    
+
                 glyph_row.extend([glyph] * camera.zoom)
                 color_row.extend([color] * camera.zoom)
             for _ in range(camera.zoom):
