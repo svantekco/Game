@@ -27,7 +27,7 @@ ZOOM_LEVELS = [1, 2, 4]
 DEFAULT_ZOOM_INDEX = 0
 
 # Game tick rate (ticks per second)
-TICK_RATE = 60
+TICK_RATE = 120
 
 # Amount of resources a villager can carry at once
 CARRY_CAPACITY = 10
