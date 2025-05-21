@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 import time
+
 from typing import Dict, List, Tuple
 
 from .constants import MAP_WIDTH, MAP_HEIGHT, TileType
@@ -64,11 +65,13 @@ class TerrainGenerator:
             return TileType.ROCK, 100, True
         if forest_chance > 0.6:
             amt = 100 if self._hash(x + 1, y + 1) > 0.1 else 0
+
             return TileType.TREE, amt, True
         return TileType.GRASS, 0, True
 
     def _init_clusters(self) -> None:
         """Populate ``precomputed_clusters`` with random centres."""
+
         count = 100
         for _ in range(count):
             x = self._rand.randint(0, self.width - 1)
@@ -94,6 +97,7 @@ class TerrainGenerator:
                     row.append(".")
             rows.append("".join(row))
         return rows
+
 
     def preview_stream(self, scale: int = 1000):
         """Yield preview rows one by one."""
