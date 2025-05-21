@@ -43,6 +43,7 @@ class Game:
     """Owns game state and runs the main loop."""
 
     def __init__(self, seed: int | None = None) -> None:
+        random.seed(seed)
         self.map = GameMap(seed=seed)
         self.entities: List[Villager] = []
         self.buildings: List[Building] = []
@@ -120,8 +121,8 @@ class Game:
 
         self.renderer = Renderer()
         self.camera = Camera()
-        # Start fully zoomed out and centred on the town hall
-        self.camera.set_zoom_level(len(ZOOM_LEVELS) - 1)
+        # Start zoomed in
+        self.camera.set_zoom_level(0)
 
         # Create a single villager at the Town Hall as a demo
         self.entities.append(Villager(id=1, position=self.townhall_pos))
@@ -139,8 +140,8 @@ class Game:
         self.paused = False
         self.single_step = False
         self.show_help = False
-        self.show_actions = False
-        self.show_buildings = False
+        self.show_actions = True
+        self.show_buildings = True
         self.show_fps = False
         self.current_fps = 0.0
         self.last_tick_ms = 0.0
@@ -149,8 +150,8 @@ class Game:
 
         # Track overlay state so the renderer can clear when toggled.
         self._prev_show_help = False
-        self._prev_show_actions = False
-        self._prev_show_buildings = False
+        self._prev_show_actions = True
+        self._prev_show_buildings = True
 
         # Next tick count when a full UI refresh should occur
         self._next_ui_refresh = UI_REFRESH_INTERVAL

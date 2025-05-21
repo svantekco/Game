@@ -104,6 +104,21 @@ class Villager:
     def _move_step(self, game: "Game") -> bool:
         if not self.target_path:
             return False
+        next_pos = self.target_path[0]
+        # Avoid stepping onto another villager or newly blocked tile
+        for v in game.entities:
+            if v is not self and v.position == next_pos:
+                return False
+        tile = game.map.get_tile(*next_pos)
+        if not tile.passable:
+            self.target_path = []
+            return False
+        for b in game.buildings:
+            cells = b.cells() if hasattr(b, "cells") else [b.position]
+            if next_pos in cells and not b.passable:
+                self.target_path = []
+                return False
+
         self.position = self.target_path.pop(0)
         game.record_tile_usage(self.position)
         tile = game.map.get_tile(*self.position)
@@ -145,6 +160,8 @@ class Villager:
                     blocked = True
                     break
             if blocked:
+                continue
+            if any(v.position == (nx, ny) for v in game.entities if v is not self):
                 continue
             self.target_path = [(nx, ny)]
             self._move_step(game)
@@ -386,7 +403,9 @@ class Villager:
                 self.adjust_mood(1)
                 self.cooldown = self._action_delay(game, VILLAGER_ACTION_DELAY)
                 if self.target_building.complete:
-                    self.target_building.passable = False
+                    self.target_building.passable = (
+                        self.target_building.blueprint.passable
+                    )
                     if self.target_building in game.build_queue:
                         game.build_queue.remove(self.target_building)
                     # Remove any queued build jobs for this now-complete building
