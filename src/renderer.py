@@ -143,6 +143,8 @@ class Renderer:
         villagers: list["Villager"],
         buildings: list[object] | None = None,
         detailed: bool = False,
+        *,
+        is_night: bool = False,
     ) -> None:
         """Render the visible portion of the map with villagers and buildings."""
 
@@ -159,6 +161,8 @@ class Renderer:
                 wy = camera.y + ty
                 tile = gmap.get_tile(wx, wy)
                 glyph, color = self._tile_to_render(tile.type, detailed)
+                if is_night:
+                    glyph = glyph.lower()
                 glyph_row.extend([glyph] * camera.zoom)
                 color_row.extend([color] * camera.zoom)
             for _ in range(camera.zoom):
@@ -178,10 +182,7 @@ class Renderer:
                     else:
                         glyph, color = b.blueprint.glyph, b.blueprint.color
 
-                    if (
-                        b.blueprint.name == "Road"
-                        and getattr(b, "complete", False)
-                    ):
+                    if b.blueprint.name == "Road" and getattr(b, "complete", False):
                         n = any(
                             nb.position == (bx, by - 1)
                             and nb.blueprint.name == "Road"
@@ -229,7 +230,7 @@ class Renderer:
         for vill in villagers:
             sx, sy = camera.world_to_screen(vill.x, vill.y)
             if 0 <= sy < len(glyph_grid) and 0 <= sx < len(glyph_grid[0]):
-                glyph_grid[sy][sx] = "@"
+                glyph_grid[sy][sx] = "z" if getattr(vill, "asleep", False) else "@"
                 color_grid[sy][sx] = Color.UI
                 mood_char = {
                     Mood.HAPPY: "^",
