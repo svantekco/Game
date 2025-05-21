@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
@@ -23,6 +24,8 @@ from .pathfinding import (
     find_path_fast,
     find_path_to_building_adjacent,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -117,25 +120,44 @@ class Villager:
                         self.target_path = []
                     else:
                         v.target_path = []
+                logger.debug(
+                    "Villager %s blocked by other villager at %s", self.id, next_pos
+                )
                 return False
             # Maintain a 2 tile buffer
-            if max(abs(v.position[0] - next_pos[0]), abs(v.position[1] - next_pos[1])) < 2:
+            if (
+                max(abs(v.position[0] - next_pos[0]), abs(v.position[1] - next_pos[1]))
+                < 2
+            ):
+                logger.debug(
+                    "Villager %s too close to villager at %s", self.id, v.position
+                )
                 return False
             # If another villager plans to move into our target tile, resolve based on id
             if v.target_path and v.target_path[0] == next_pos:
                 if self.id > v.id:
                     self.target_path = []
+                    logger.debug(
+                        "Villager %s yielding target tile %s to %s",
+                        self.id,
+                        next_pos,
+                        v.id,
+                    )
                     return False
                 else:
                     v.target_path = []
         tile = game.map.get_tile(*next_pos)
         if not tile.passable:
             self.target_path = []
+            logger.debug(
+                "Villager %s blocked by impassable tile at %s", self.id, next_pos
+            )
             return False
         for b in game.buildings:
             cells = b.cells() if hasattr(b, "cells") else [b.position]
             if next_pos in cells and not b.passable:
                 self.target_path = []
+                logger.debug("Villager %s blocked by building at %s", self.id, next_pos)
                 return False
 
         self.position = self.target_path.pop(0)
@@ -185,6 +207,7 @@ class Villager:
             self.target_path = [(nx, ny)]
             self._move_step(game)
             return True
+        logger.debug("Villager %s failed to wander from %s", self.id, self.position)
         return False
 
     def thought(self, game: "Game") -> str:
@@ -324,6 +347,12 @@ class Villager:
                     search_limit=game.get_search_limit(),
                 )
                 self.target_path = path[1:]
+                if not self.target_path:
+                    logger.debug(
+                        "Villager %s could not path to build site at %s",
+                        self.id,
+                        self.target_building.position,
+                    )
                 self.state = "build"
                 return
         if self.state == "gather":
@@ -339,10 +368,15 @@ class Villager:
                         search_limit=game.get_search_limit(),
                     )
                     self.target_path = path[1:]
-                    if not self.target_path:
-                        self.target_resource = None
-                        self.state = "idle"
-                        self._wander(game)
+                if not self.target_path:
+                    logger.debug(
+                        "Villager %s could not path to resource at %s",
+                        self.id,
+                        self.target_resource,
+                    )
+                    self.target_resource = None
+                    self.state = "idle"
+                    self._wander(game)
                 return
             if self.target_resource and self.position == self.target_resource:
                 tile = game.map.get_tile(*self.position)
@@ -391,6 +425,11 @@ class Villager:
                 )
                 self.target_path = path[1:]
                 if not self.target_path:
+                    logger.debug(
+                        "Villager %s could not path to storage at %s",
+                        self.id,
+                        self.target_storage,
+                    )
                     self.state = "idle"
                     self._wander(game)
                     return
@@ -418,6 +457,11 @@ class Villager:
                 )
                 self.target_path = path[1:]
                 if not self.target_path:
+                    logger.debug(
+                        "Villager %s lost path to build site at %s",
+                        self.id,
+                        self.target_building.position if self.target_building else None,
+                    )
                     self.state = "idle"
                     self._wander(game)
                 return

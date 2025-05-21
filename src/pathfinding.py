@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import heapq
+import logging
 import random
 from typing import Dict, List, Optional, Tuple, Iterable, Set
 
 from .map import GameMap
 from .constants import TileType, SEARCH_LIMIT
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -120,6 +123,7 @@ def _nearest_passable(
             if gmap.get_tile(*n).passable:
                 return n
             q.append(n)
+    logger.debug("_nearest_passable hit search limit from %s", start)
     return start
 
 
@@ -149,6 +153,12 @@ def find_path(
         current = node.position
         explored += 1
         if explored > search_limit:
+            logger.debug(
+                "find_path search limit reached (%d) from %s to %s",
+                search_limit,
+                start,
+                goal,
+            )
             break
         if current == goal:
             # reconstruct path
@@ -173,6 +183,12 @@ def find_path(
                 heapq.heappush(open_heap, _PQNode(f_score, counter, n))
                 counter += 1
 
+    logger.debug(
+        "find_path failed from %s to %s after exploring %d nodes",
+        start,
+        goal,
+        explored,
+    )
     return []  # no path found
 
 
@@ -323,8 +339,7 @@ def _nearest_resource_bfs(
             tile.type is resource_type
             and tile.resource_amount > 0
             and all(
-                max(abs(current[0] - ax), abs(current[1] - ay)) >= 2
-                for ax, ay in avoid
+                max(abs(current[0] - ax), abs(current[1] - ay)) >= 2 for ax, ay in avoid
             )
         ):
             found = current
@@ -347,6 +362,11 @@ def _nearest_resource_bfs(
             came_from[n] = current
             q.append(n)
 
+    logger.debug(
+        "_nearest_resource_bfs explored %d nodes without result from %s",
+        explored,
+        start,
+    )
     return None, []
 
 
@@ -376,14 +396,13 @@ def find_nearest_resource(
         options = [
             p
             for p in cluster
-            if all(
-                max(abs(p[0] - ax), abs(p[1] - ay)) >= 2
-                for ax, ay in avoid
-            )
+            if all(max(abs(p[0] - ax), abs(p[1] - ay)) >= 2 for ax, ay in avoid)
         ]
         if not options:
             continue
-        candidate = min(options, key=lambda p: abs(p[0] - start[0]) + abs(p[1] - start[1]))
+        candidate = min(
+            options, key=lambda p: abs(p[0] - start[0]) + abs(p[1] - start[1])
+        )
         path = find_path(start, candidate, gmap, buildings, search_limit=search_limit)
         if path and (not best_path or len(path) < len(best_path)):
             best_path = path
@@ -393,9 +412,16 @@ def find_nearest_resource(
         return best_target, best_path
 
     # Fallback to BFS if no cluster produced a viable path
-    pos, path = _nearest_resource_bfs(start, resource_type, gmap, buildings, search_limit, avoid)
+    pos, path = _nearest_resource_bfs(
+        start, resource_type, gmap, buildings, search_limit, avoid
+    )
     if pos is not None:
         return pos, path
+    logger.debug(
+        "find_nearest_resource failed cluster search around %s for %s",
+        start,
+        resource_type.name,
+    )
     # Last resort ignore avoidance
     return _nearest_resource_bfs(start, resource_type, gmap, buildings, search_limit)
 
@@ -451,6 +477,11 @@ def find_path_hierarchical(
         coarse_start, coarse_goal, scaled, buildings, search_limit=search_limit
     )
     if not coarse_path:
+        logger.debug(
+            "find_path_hierarchical failed coarse pass from %s to %s",
+            start,
+            goal,
+        )
         return []
 
     path: List[Tuple[int, int]] = []
@@ -459,6 +490,11 @@ def find_path_hierarchical(
         target = (cp[0] * step, cp[1] * step)
         segment = find_path(current, target, gmap, buildings, search_limit=search_limit)
         if not segment:
+            logger.debug(
+                "find_path_hierarchical failed segment from %s to %s",
+                current,
+                target,
+            )
             return []
         if path and segment[0] == path[-1]:
             path.extend(segment[1:])
@@ -470,6 +506,11 @@ def find_path_hierarchical(
         current, goal_pass, gmap, buildings, search_limit=search_limit
     )
     if not final_segment:
+        logger.debug(
+            "find_path_hierarchical failed final segment from %s to %s",
+            current,
+            goal_pass,
+        )
         return []
     if path and final_segment[0] == path[-1]:
         path.extend(final_segment[1:])

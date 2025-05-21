@@ -1,8 +1,9 @@
 # Game loop and state management
 from __future__ import annotations
 
-import time
+import logging
 import random
+import time
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
@@ -19,7 +20,6 @@ from .constants import (
     Role,
 )
 
-
 from .building import BuildingBlueprint, Building
 from .tile import Tile
 from .map import GameMap, Zone
@@ -27,6 +27,8 @@ from .renderer import Renderer
 from .camera import Camera
 from .villager import Villager
 from .world import World
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -392,6 +394,7 @@ class Game:
                 ):
                     visited.add((nx, ny))
                     q.append((nx, ny))
+        logger.debug("_find_start_pos searched %d tiles without success", searched)
         return origin
 
     def _find_nearest_passable(self, origin: Tuple[int, int]) -> Tuple[int, int]:
@@ -415,6 +418,10 @@ class Game:
                 ):
                     visited.add((nx, ny))
                     q.append((nx, ny))
+        logger.debug(
+            "_find_nearest_passable hit search limit from %s",
+            origin,
+        )
         return origin
 
     def _count_resource_nearby(
