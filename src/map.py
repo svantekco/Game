@@ -1,8 +1,20 @@
 import random
+from dataclasses import dataclass
 from typing import Dict, Tuple
 
-from .constants import MAP_WIDTH, MAP_HEIGHT, TileType
+from .constants import MAP_WIDTH, MAP_HEIGHT, TileType, ZoneType
 from .tile import Tile
+
+
+@dataclass
+class Zone:
+    """Simple rectangular zone."""
+
+    type: ZoneType
+    x: int
+    y: int
+    width: int
+    height: int
 
 
 class GameMap:
@@ -15,6 +27,8 @@ class GameMap:
         self._rand = random.Random(seed)
         # Tiles are generated lazily and cached in this dict
         self._tiles: Dict[Tuple[int, int], Tile] = {}
+        # Map of coordinates to zone type
+        self._zones: Dict[Tuple[int, int], ZoneType] = {}
 
     def _hash(self, x: int, y: int) -> float:
         """Deterministic hash used for noise generation."""
@@ -60,4 +74,13 @@ class GameMap:
         key = (x, y)
         if key not in self._tiles:
             self._tiles[key] = self._generate_tile(x, y)
-        return self._tiles[key]
+        tile = self._tiles[key]
+        tile.zone = self._zones.get(key)
+        return tile
+
+    def add_zone(self, zone: "Zone") -> None:
+        """Mark a rectangular area as belonging to ``zone``."""
+        for x in range(zone.x, zone.x + zone.width):
+            for y in range(zone.y, zone.y + zone.height):
+                if 0 <= x < self.width and 0 <= y < self.height:
+                    self._zones[(x, y)] = zone.type

@@ -19,6 +19,7 @@ from .constants import (
     STATUS_PANEL_Y,
     Personality,
     Mood,
+    ZoneType,
 )
 from .pathfinding import (
     find_nearest_resource,
@@ -27,7 +28,7 @@ from .pathfinding import (
 )
 from .building import BuildingBlueprint, Building
 
-from .map import GameMap
+from .map import GameMap, Zone
 from .renderer import Renderer
 from .camera import Camera
 
@@ -81,7 +82,9 @@ class Villager:
 
     def _action_delay(self, game: "Game", base_delay: int) -> int:
         delay = self._apply_tool_bonus(game, base_delay)
-        delay = int(delay * self._personality_delay_factor() * self._mood_delay_factor())
+        delay = int(
+            delay * self._personality_delay_factor() * self._mood_delay_factor()
+        )
         return max(1, delay)
 
     def adjust_mood(self, delta: int) -> None:
@@ -131,9 +134,7 @@ class Villager:
                 if self.position == self.target_resource:
                     return f"Gathering {self.resource_type.name.lower()}"
                 if self.target_path:
-                    return (
-                        f"Heading to {self.resource_type.name.lower()} at {self.target_resource}"
-                    )
+                    return f"Heading to {self.resource_type.name.lower()} at {self.target_resource}"
                 return "Stuck: no path to resource"
             return "Searching for resource"
         if self.state == "deliver":
@@ -147,9 +148,7 @@ class Villager:
                 if self._adjacent_to_building(self.target_building):
                     return f"Building {self.target_building.blueprint.name}"
                 if self.target_path:
-                    return (
-                        f"Heading to build {self.target_building.blueprint.name}"
-                    )
+                    return f"Heading to build {self.target_building.blueprint.name}"
                 return "Stuck: no path to site"
             return "Searching for build"
         return self.state
@@ -276,7 +275,7 @@ class Villager:
                 if self.target_building.blueprint.name == "House":
                     game.schedule_spawn(self.target_building.position)
                 self.state = "idle"
-            
+
     @property
     def x(self) -> int:
         return self.position[0]
@@ -334,6 +333,34 @@ class Game:
         storage.passable = True
         self.buildings.append(storage)
         self.storage_positions: List[Tuple[int, int]] = [self.storage_pos]
+
+        # Define basic zones around the town hall
+        self.zones: Dict[ZoneType, Zone] = {}
+        work_zone = Zone(
+            ZoneType.WORK,
+            self.townhall_pos[0] - 25,
+            self.townhall_pos[1] - 25,
+            50,
+            50,
+        )
+        housing_zone = Zone(
+            ZoneType.HOUSING,
+            work_zone.x - 50,
+            work_zone.y,
+            50,
+            50,
+        )
+        market_zone = Zone(
+            ZoneType.MARKET,
+            work_zone.x,
+            work_zone.y + 50,
+            50,
+            50,
+        )
+        for z in (work_zone, housing_zone, market_zone):
+            self.map.add_zone(z)
+            self._clear_zone(z)
+            self.zones[z.type] = z
 
         from collections import defaultdict
 
@@ -511,6 +538,24 @@ class Game:
                     count += 1
         return count
 
+    def _clear_zone(self, zone: Zone) -> None:
+        """Remove trees and rocks inside ``zone`` and store the resources."""
+        for x in range(zone.x, zone.x + zone.width):
+            for y in range(zone.y, zone.y + zone.height):
+                tile = self.map.get_tile(x, y)
+                if tile.type is TileType.TREE:
+                    gained = tile.extract(tile.resource_amount)
+                    self.adjust_storage("wood", gained)
+                elif tile.type is TileType.ROCK:
+                    gained = tile.extract(tile.resource_amount)
+                    self.adjust_storage("stone", gained)
+
+    def _expand_zone(self, zone: Zone, dx: int = 10, dy: int = 0) -> None:
+        """Expand ``zone`` and update the map."""
+        zone.width += dx
+        zone.height += dy
+        self.map.add_zone(zone)
+
     def get_search_limit(self) -> int:
         """Return BFS search limit factoring in built Watchtowers."""
         bonus = sum(
@@ -538,8 +583,15 @@ class Game:
         return True
 
     def find_build_site(
-        self, blueprint: BuildingBlueprint
+        self, blueprint: BuildingBlueprint, zone: Zone | None = None
     ) -> Optional[Tuple[int, int]]:
+        if zone is not None:
+            for y in range(zone.y, zone.y + zone.height):
+                for x in range(zone.x, zone.x + zone.width):
+                    if self.is_area_free((x, y), blueprint):
+                        return (x, y)
+            return None
+
         from collections import deque
 
         starts = [b.position for b in self.buildings] or [self.storage_pos]
@@ -761,7 +813,11 @@ class Game:
             and self.storage["stone"] >= storage_bp.stone
             and not any(b.blueprint.name == "Storage" for b in self.build_queue)
         ):
-            pos = self.find_build_site(storage_bp)
+            zone = self.zones.get(ZoneType.WORK)
+            pos = self.find_build_site(storage_bp, zone)
+            if pos is None and zone is not None:
+                self._expand_zone(zone)
+                pos = self.find_build_site(storage_bp, zone)
             if pos:
                 self.storage["wood"] -= storage_bp.wood
                 self.storage["stone"] -= storage_bp.stone
@@ -781,7 +837,11 @@ class Game:
             and not any(b.blueprint.name == "Lumberyard" for b in self.build_queue)
             and not any(b.blueprint.name == "Lumberyard" for b in self.buildings)
         ):
-            pos = self.find_build_site(lumber_bp)
+            zone = self.zones.get(ZoneType.WORK)
+            pos = self.find_build_site(lumber_bp, zone)
+            if pos is None and zone is not None:
+                self._expand_zone(zone)
+                pos = self.find_build_site(lumber_bp, zone)
             if pos:
                 self.storage["wood"] -= lumber_bp.wood
                 self.storage["stone"] -= lumber_bp.stone
@@ -798,7 +858,11 @@ class Game:
             and not any(b.blueprint.name == "Blacksmith" for b in self.build_queue)
             and not any(b.blueprint.name == "Blacksmith" for b in self.buildings)
         ):
-            pos = self.find_build_site(black_bp)
+            zone = self.zones.get(ZoneType.WORK)
+            pos = self.find_build_site(black_bp, zone)
+            if pos is None and zone is not None:
+                self._expand_zone(zone)
+                pos = self.find_build_site(black_bp, zone)
             if pos:
                 self.storage["wood"] -= black_bp.wood
                 self.storage["stone"] -= black_bp.stone
@@ -816,7 +880,11 @@ class Game:
             and self.storage["wood"] > self.house_threshold
             and len(self.entities) >= houses * 2
         ):
-            pos = self.find_build_site(house_bp)
+            zone = self.zones.get(ZoneType.HOUSING)
+            pos = self.find_build_site(house_bp, zone)
+            if pos is None and zone is not None:
+                self._expand_zone(zone)
+                pos = self.find_build_site(house_bp, zone)
             if pos:
                 self.storage["wood"] -= house_bp.wood
                 self.storage["stone"] -= house_bp.stone

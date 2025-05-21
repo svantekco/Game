@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from .constants import TileType
+from .constants import TileType, ZoneType
 
 
 @dataclass
@@ -9,6 +9,7 @@ class Tile:
     type: TileType
     resource_amount: int = 0
     passable: bool = True
+    zone: ZoneType | None = None
 
     def __repr__(self) -> str:
         return (
