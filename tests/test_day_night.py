@@ -11,6 +11,12 @@ def test_world_day_night_toggle():
     assert world.is_night
 
 
+def test_world_time_of_day():
+    world = World(tick_rate=10, day_length=20)
+    world.tick_count = world.day_length // 2
+    assert world.time_of_day == "12:00"
+
+
 def test_villager_sleeps_at_night():
     game = Game(seed=1)
     vill = game.entities[0]
