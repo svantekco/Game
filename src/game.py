@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import time
+import random
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional
@@ -11,10 +12,13 @@ from .constants import (
     TileType,
     ZOOM_LEVELS,
     TICK_RATE,
+    UI_REFRESH_INTERVAL,
     VILLAGER_ACTION_DELAY,
     MAX_STORAGE,
     SEARCH_LIMIT,
     STATUS_PANEL_Y,
+    Personality,
+    Mood,
 )
 from .pathfinding import find_nearest_resource, find_path
 from .building import BuildingBlueprint, Building
@@ -39,6 +43,10 @@ class Villager:
     target_building: Optional[Building] = None
     target_storage: Optional[Tuple[int, int]] = None
     cooldown: int = 0
+    personality: Personality = field(
+        default_factory=lambda: random.choice(list(Personality))
+    )
+    mood: Mood = Mood.NEUTRAL
 
     # ---------------------------------------------------------------
     def is_full(self) -> bool:
@@ -52,6 +60,31 @@ class Villager:
                 if abs(bx - self.position[0]) <= 5 and abs(by - self.position[1]) <= 5:
                     return max(1, delay // 2)
         return delay
+
+    def _personality_delay_factor(self) -> float:
+        if self.personality is Personality.LAZY:
+            return 1.2
+        if self.personality is Personality.INDUSTRIOUS:
+            return 0.8
+        return 1.0
+
+    def _mood_delay_factor(self) -> float:
+        if self.mood is Mood.HAPPY:
+            return 0.9
+        if self.mood is Mood.SAD:
+            return 1.1
+        return 1.0
+
+    def _action_delay(self, game: "Game", base_delay: int) -> int:
+        delay = self._apply_tool_bonus(game, base_delay)
+        delay = int(delay * self._personality_delay_factor() * self._mood_delay_factor())
+        return max(1, delay)
+
+    def adjust_mood(self, delta: int) -> None:
+        levels = [Mood.SAD, Mood.NEUTRAL, Mood.HAPPY]
+        idx = levels.index(self.mood)
+        idx = max(0, min(len(levels) - 1, idx + delta))
+        self.mood = levels[idx]
 
     def _move_step(self, game: "Game") -> bool:
         """Move one step along the current path and apply terrain slowdown."""
@@ -74,8 +107,7 @@ class Villager:
             ):
                 delay = max(1, delay // 2)
                 break
-        delay = self._apply_tool_bonus(game, delay)
-        self.cooldown = delay
+        self.cooldown = self._action_delay(game, delay)
         return True
 
     def thought(self, game: "Game") -> str:
@@ -114,12 +146,20 @@ class Villager:
 
     def update(self, game: "Game") -> None:
         """Finite state machine handling villager behaviour."""
+        if self.personality is Personality.SOCIAL:
+            if any(
+                v is not self and abs(v.x - self.x) <= 1 and abs(v.y - self.y) <= 1
+                for v in game.entities
+            ):
+                self.adjust_mood(1)
+
         if self.cooldown > 0:
             self.cooldown -= 1
             return
         if self.state == "idle":
             job = game.dispatch_job()
             if not job:
+                self.adjust_mood(-1)
                 return
             if job.type == "gather":
                 resource_type = (
@@ -171,7 +211,8 @@ class Villager:
                     self.inventory["stone"] += gained
                 else:
                     self.inventory["wood"] += gained
-                self.cooldown = self._apply_tool_bonus(game, VILLAGER_ACTION_DELAY)
+                self.adjust_mood(1)
+                self.cooldown = self._action_delay(game, VILLAGER_ACTION_DELAY)
                 if self.is_full() or tile.resource_amount == 0:
                     self.state = "deliver"
                     self.target_path = []
@@ -194,7 +235,8 @@ class Villager:
                     if self.inventory.get(res, 0) > 0:
                         game.adjust_storage(res, self.inventory.get(res, 0))
                         self.inventory[res] = 0
-                self.cooldown = self._apply_tool_bonus(game, VILLAGER_ACTION_DELAY)
+                self.adjust_mood(1)
+                self.cooldown = self._action_delay(game, VILLAGER_ACTION_DELAY)
                 self.state = "idle"
 
         if self.state == "build":
@@ -202,7 +244,8 @@ class Villager:
                 return
             if self.target_building and self.position == self.target_building.position:
                 self.target_building.progress += 1
-                self.cooldown = self._apply_tool_bonus(game, VILLAGER_ACTION_DELAY)
+                self.adjust_mood(1)
+                self.cooldown = self._action_delay(game, VILLAGER_ACTION_DELAY)
                 if self.target_building.complete:
                     self.target_building.passable = False
                     if self.target_building in game.build_queue:
@@ -304,6 +347,9 @@ class Game:
         self._prev_show_help = False
         self._prev_show_actions = False
         self._prev_show_buildings = False
+
+        # Next tick count when a full UI refresh should occur
+        self._next_ui_refresh = UI_REFRESH_INTERVAL
 
     # --- Resource Helpers ---------------------------------------------
     def adjust_storage(self, resource: str, amount: int) -> None:
@@ -762,6 +808,13 @@ class Game:
     def render(self) -> None:
         """Draw the current game state."""
         detailed = self.camera.zoom_index >= 1
+
+        if self.tick_count >= self._next_ui_refresh:
+            # Force a full redraw periodically to prevent UI artifacts
+            self.renderer.clear()
+            self.renderer._last_glyphs = None
+            self.renderer._last_colors = None
+            self._next_ui_refresh = self.tick_count + UI_REFRESH_INTERVAL
 
         if (
             self.show_help != self._prev_show_help
