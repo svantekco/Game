@@ -92,3 +92,12 @@ class ZoneType(Enum):
     HOUSING = auto()
     WORK = auto()
     MARKET = auto()
+
+
+class LifeStage(Enum):
+    """Lifecycle stages for villagers."""
+
+    CHILD = auto()
+    ADULT = auto()
+    ELDER = auto()
+    RETIRED = auto()

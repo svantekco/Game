@@ -8,10 +8,14 @@ class World:
         self.tick_rate = tick_rate
         self.day_length = day_length or tick_rate * 30
         self.tick_count = 0
+        self.day = 0
 
     def tick(self) -> None:
         """Advance world time by one tick."""
+        prev = self.tick_count // self.day_length
         self.tick_count += 1
+        if self.tick_count // self.day_length > prev:
+            self.day += 1
 
     @property
     def is_night(self) -> bool:

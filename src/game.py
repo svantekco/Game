@@ -15,6 +15,7 @@ from .constants import (
     SEARCH_LIMIT,
     STATUS_PANEL_Y,
     ZoneType,
+    LifeStage,
 )
 
 
@@ -47,7 +48,8 @@ class Game:
         self.stone_threshold = 40
         self.house_threshold = 50
         self.next_entity_id = 2
-        self.pending_spawns: List[Tuple[int, Tuple[int, int]]] = []
+        self.pending_spawns: List[Tuple[int, Tuple[int, int], int, LifeStage]] = []
+        self.event_log: List[str] = []
 
         # Predefined blueprints
         # Blueprints are now loaded dynamically from ``src.blueprints`` so that
@@ -156,19 +158,39 @@ class Game:
             self.storage[resource] = 0
 
     # --- Population Helpers -----------------------------------------
-    def schedule_spawn(self, position: Tuple[int, int], delay: int = 10) -> None:
+    def schedule_spawn(
+        self,
+        position: Tuple[int, int],
+        delay: int = 10,
+        *,
+        age: int = 18,
+        stage: LifeStage = LifeStage.ADULT,
+    ) -> None:
         """Schedule a villager to spawn after ``delay`` ticks."""
-        self.pending_spawns.append([delay, position])
+        self.pending_spawns.append([delay, position, age, stage])
 
     def _process_spawns(self) -> None:
         for spawn in list(self.pending_spawns):
             spawn[0] -= 1
             if spawn[0] <= 0:
-                self._spawn_villager(spawn[1])
+                self._spawn_villager(spawn[1], spawn[2], spawn[3])
                 self.pending_spawns.remove(spawn)
 
-    def _spawn_villager(self, position: Tuple[int, int]) -> None:
-        villager = Villager(id=self.next_entity_id, position=position)
+    def log_event(self, text: str) -> None:
+        """Record a short message for the HUD."""
+        self.event_log.append(text)
+        if len(self.event_log) > 5:
+            self.event_log.pop(0)
+
+    def _spawn_villager(
+        self, position: Tuple[int, int], age: int, stage: LifeStage
+    ) -> None:
+        villager = Villager(
+            id=self.next_entity_id,
+            position=position,
+            age=age,
+            life_stage=stage,
+        )
         self.next_entity_id += 1
         self.entities.append(villager)
         self._assign_home(villager)
@@ -233,6 +255,25 @@ class Game:
         farms = [b for b in self.buildings if b.blueprint.name == "Farm" and b.complete]
         for _ in farms:
             self.adjust_storage("food", 1)
+
+    def _handle_births(self) -> None:
+        houses = [b for b in self.buildings if b.blueprint.name == "House" and b.complete]
+        capacity = len(houses) * 2
+        if len(self.entities) >= capacity:
+            return
+        if self.storage.get("food", 0) <= 0:
+            return
+        for house in houses:
+            if len(house.residents) < 2:
+                self.storage["food"] -= 1
+                self.schedule_spawn(house.position, delay=0, age=0, stage=LifeStage.CHILD)
+                self.log_event("A child is born")
+                break
+
+    def _daily_update(self) -> None:
+        for vill in self.entities:
+            vill.age_one_day(self)
+        self._handle_births()
 
     def _find_start_pos(self) -> Tuple[int, int]:
         """Find a suitable starting tile with nearby resources."""
@@ -611,8 +652,11 @@ class Game:
         if not self.paused or self.single_step:
             for vill in self.entities:
                 vill.update(self)
+            prev_day = self.world.day
             self.world.tick()
             self.tick_count = self.world.tick_count
+            if self.world.day != prev_day:
+                self._daily_update()
             self.single_step = False
 
         # Process pending villager spawns
@@ -817,3 +861,7 @@ class Game:
         if self.show_actions:
             lines = [f"Villager {v.id}: {v.thought(self)}" for v in self.entities]
             self.renderer.render_overlay(lines, start_y=overlay_start)
+            overlay_start += len(lines)
+
+        if self.event_log:
+            self.renderer.render_overlay(self.event_log, start_y=overlay_start)
