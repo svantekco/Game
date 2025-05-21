@@ -230,7 +230,8 @@ class Game:
             return
         builder = min(
             self.entities,
-            key=lambda v: abs(v.x - building.position[0]) + abs(v.y - building.position[1]),
+            key=lambda v: abs(v.x - building.position[0])
+            + abs(v.y - building.position[1]),
         )
         building.builder_id = builder.id
         self.jobs.append(Job("build", building, target_villager=builder.id))
@@ -273,7 +274,9 @@ class Game:
                 self.adjust_storage("food", 1)
 
     def _handle_births(self) -> None:
-        houses = [b for b in self.buildings if b.blueprint.name == "House" and b.complete]
+        houses = [
+            b for b in self.buildings if b.blueprint.name == "House" and b.complete
+        ]
         capacity = sum(h.capacity for h in houses)
         if len(self.entities) >= capacity:
             return
@@ -282,7 +285,9 @@ class Game:
         for house in houses:
             if len(house.residents) < house.capacity:
                 self.storage["food"] -= 1
-                self.schedule_spawn(house.position, delay=0, age=0, stage=LifeStage.CHILD)
+                self.schedule_spawn(
+                    house.position, delay=0, age=0, stage=LifeStage.CHILD
+                )
                 self.log_event("A child is born")
                 break
 
@@ -508,9 +513,7 @@ class Game:
         reqs = self._townhall_requirements()
         for name, (cnt, lvl) in reqs.items():
             built = [
-                b
-                for b in self.buildings
-                if b.blueprint.name == name and b.level >= lvl
+                b for b in self.buildings if b.blueprint.name == name and b.level >= lvl
             ]
             if len(built) < cnt:
                 return False
@@ -518,7 +521,10 @@ class Game:
 
     def _can_upgrade(self, b: Building) -> bool:
         wood, stone = b.upgrade_cost()
-        return self.storage.get("wood", 0) >= wood and self.storage.get("stone", 0) >= stone
+        return (
+            self.storage.get("wood", 0) >= wood
+            and self.storage.get("stone", 0) >= stone
+        )
 
     def _upgrade_building(self, b: Building) -> None:
         wood, stone = b.upgrade_cost()
@@ -540,7 +546,6 @@ class Game:
 
     def _plan_townhall_progress(self) -> None:
         """Enqueue buildings and upgrades required for the next Town Hall level."""
-        th = self._townhall()
         reqs = self._townhall_requirements()
         # Build additional structures if counts are too low
         for name, (count, level) in reqs.items():
@@ -579,7 +584,11 @@ class Game:
             lines.append(f"Next: TownHall -> L{th.level + 1}")
             for name, (cnt, lvl) in reqs.items():
                 have = len(
-                    [b for b in self.buildings if b.blueprint.name == name and b.level >= lvl]
+                    [
+                        b
+                        for b in self.buildings
+                        if b.blueprint.name == name and b.level >= lvl
+                    ]
                 )
                 lines.append(f"{name}: {have}/{cnt} lvl>= {lvl}")
             w, s = th.upgrade_cost()
