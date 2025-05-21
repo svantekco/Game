@@ -104,6 +104,53 @@ class Villager:
         idx = max(0, min(len(levels) - 1, idx + delta))
         self.mood = levels[idx]
 
+    # ------------------------------------------------------------------
+    def _move_away_from(
+        self, other: Tuple[int, int], game: "Game"
+    ) -> bool:
+        """Step one tile away from ``other`` if possible."""
+
+        options = []
+        dx = self.position[0] - other[0]
+        dy = self.position[1] - other[1]
+        if dx != 0:
+            step_x = self.position[0] + (1 if dx > 0 else -1)
+            options.append((step_x, self.position[1]))
+        if dy != 0:
+            step_y = self.position[1] + (1 if dy > 0 else -1)
+            options.append((self.position[0], step_y))
+        random.shuffle(options)
+        for nx, ny in options:
+            if not (0 <= nx < game.map.width and 0 <= ny < game.map.height):
+                continue
+            tile = game.map.get_tile(nx, ny)
+            if not tile.passable:
+                continue
+            if any(v.position == (nx, ny) for v in game.entities if v is not self):
+                continue
+            blocked = False
+            for b in game.buildings:
+                cells = b.cells() if hasattr(b, "cells") else [b.position]
+                if (nx, ny) in cells and not b.passable:
+                    blocked = True
+                    break
+            if blocked:
+                continue
+            self.target_path = [(nx, ny)]
+            return self._move_step(game)
+        return False
+
+    def _avoid_nearby_villagers(self, game: "Game") -> bool:
+        """Move away if another villager is too close."""
+
+        for v in game.entities:
+            if v is self:
+                continue
+            if max(abs(v.x - self.x), abs(v.y - self.y)) < 2:
+                if self._move_away_from(v.position, game):
+                    return True
+        return False
+
     def _move_step(self, game: "Game") -> bool:
         if not self.target_path:
             return False
@@ -307,6 +354,8 @@ class Villager:
                 self.adjust_mood(1)
         if self.cooldown > 0:
             self.cooldown -= 1
+            return
+        if self._avoid_nearby_villagers(game):
             return
         if self.state == "idle":
             job = game.dispatch_job(self)
