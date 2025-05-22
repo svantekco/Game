@@ -267,12 +267,11 @@ class Game:
                 vill.role = role
                 counts[role].append(vill)
 
-        wood_need = max(0, self.wood_threshold - self.storage.get("wood", 0))
-        stone_need = max(0, self.stone_threshold - self.storage.get("stone", 0))
-        preferred = Role.WOODCUTTER if wood_need >= stone_need else Role.MINER
-
-        for v in unassigned:
-            v.role = preferred
+        while unassigned:
+            role = min(mandatory, key=lambda r: len(counts.get(r, [])))
+            vill = unassigned.pop()
+            vill.role = role
+            counts[role].append(vill)
 
     # --- Usage Tracking ---------------------------------------------
     def record_tile_usage(self, pos: Tuple[int, int]) -> None:

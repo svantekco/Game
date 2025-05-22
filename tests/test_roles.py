@@ -23,3 +23,17 @@ def test_woodcutter_gathers_wood():
     job = game.dispatch_job(woodcutter)
     assert job.type == "gather"
     assert job.payload == TileType.TREE
+
+
+def test_roles_distributed_evenly():
+    game = Game(seed=1)
+    for _ in range(11):
+        game._spawn_villager(game.townhall_pos, age=18, stage=LifeStage.ADULT)
+    game._update_roles()
+    mandatory = [Role.BUILDER, Role.WOODCUTTER, Role.MINER, Role.ROAD_PLANNER]
+    counts = {role: 0 for role in mandatory}
+    for v in game.entities:
+        if v.role in counts:
+            counts[v.role] += 1
+    values = list(counts.values())
+    assert max(values) - min(values) <= 1
