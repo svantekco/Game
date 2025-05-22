@@ -632,13 +632,25 @@ class Game:
                 return b
         raise RuntimeError("No Town Hall")
 
+    def _count_buildings(self, name: str, min_level: int = 1) -> int:
+        """Return count of completed buildings named ``name`` at ``min_level`` or higher."""
+        return sum(
+            1
+            for b in self.buildings
+            if b.blueprint.name == name and b.level >= min_level and b.complete
+        )
+
     def _townhall_requirements(self) -> Dict[str, Tuple[int, int]]:
         th = self._townhall()
         reqs: Dict[str, Tuple[int, int]] = {}
         for bpname, bp in self.blueprints.items():
             if bpname == "TownHall":
                 continue
-            built = [b for b in self.buildings if b.blueprint.name == bpname]
+            built = [
+                b
+                for b in self.buildings
+                if b.blueprint.name == bpname and b.complete
+            ]
             if not built:
                 continue
             avg_level = sum(b.level for b in built) / len(built)
@@ -648,10 +660,8 @@ class Game:
     def _meets_townhall_requirements(self) -> bool:
         reqs = self._townhall_requirements()
         for name, (cnt, lvl) in reqs.items():
-            built = [
-                b for b in self.buildings if b.blueprint.name == name and b.level >= lvl
-            ]
-            if len(built) < cnt:
+            built = self._count_buildings(name, lvl)
+            if built < cnt:
                 return False
         return True
 
@@ -719,19 +729,23 @@ class Game:
         if not (self._can_upgrade(th) and self._meets_townhall_requirements()):
             lines.append(f"Next: TownHall -> L{th.level + 1}")
             for name, (cnt, lvl) in reqs.items():
-                have = len(
-                    [
-                        b
-                        for b in self.buildings
-                        if b.blueprint.name == name and b.level >= lvl
-                    ]
-                )
+                have = self._count_buildings(name, lvl)
                 lines.append(f"{name}: {have}/{cnt} lvl>= {lvl}")
             w, s = th.upgrade_cost()
             lines.append(f"Cost W:{w} S:{s}")
         else:
             lines.append("TownHall ready to upgrade")
         return lines
+
+    def _village_goals_hint(self) -> List[str]:
+        """Return static high level village goals for display."""
+        th = self._townhall()
+        houses = self._count_buildings("House")
+        return [
+            f"Houses built: {houses}",
+            f"Upgrade TownHall to L{th.level + 1}",
+            "Explore the world",
+        ]
 
     def _expand_housing(self) -> None:
         """Construct additional houses when population hits capacity."""
@@ -1013,3 +1027,9 @@ class Game:
 
         if self.event_log:
             self.renderer.render_overlay(self.event_log, start_y=overlay_start)
+            overlay_start += len(self.event_log)
+
+        goal_lines = self._village_goals_hint()
+        if goal_lines:
+            self.renderer.render_overlay(goal_lines, start_y=overlay_start)
+            overlay_start += len(goal_lines)
