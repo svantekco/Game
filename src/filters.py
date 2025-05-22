@@ -63,16 +63,30 @@ def apply_lighting(
 
 
 def day_night_filter(color: ColorRGB, tile: Tile, day_fraction: float) -> ColorRGB:
-    """Darken or lighten ``color`` based on ``day_fraction``.
+    """Apply a simple four-step colour cycle based on ``day_fraction``.
 
-    ``day_fraction`` should be in ``[0,1]`` where ``0`` is midnight and ``0.5``
-    is noon.
+    Instead of gradually fading colours, the world now shifts through four
+    distinct tints:
+
+    ``00:00-06:00`` (night), ``06:00-12:00`` (morning), ``12:00-18:00``
+    (afternoon) and ``18:00-00:00`` (evening).  The night tint is less dark than
+    before to keep the scene visible.
     """
+
     hour = int(day_fraction * 24)
-    hour_fraction = hour / 24
-    brightness = 0.3 + 0.7 * math.sin(math.pi * hour_fraction)
-    r, g, b = color
-    return (int(r * brightness), int(g * brightness), int(b * brightness))
+    if 0 <= hour < 6:  # Night - subtle blue tint
+        tint = (0.6, 0.7, 1.0)
+    elif 6 <= hour < 12:  # Morning - slight warm tint
+        tint = (1.1, 1.0, 0.9)
+    elif 12 <= hour < 18:  # Afternoon - neutral
+        tint = (1.0, 1.0, 1.0)
+    else:  # Evening - orange hue
+        tint = (1.1, 0.9, 0.8)
+
+    r = min(255, int(color[0] * tint[0]))
+    g = min(255, int(color[1] * tint[1]))
+    b = min(255, int(color[2] * tint[2]))
+    return (r, g, b)
 
 
 def zone_filter(color: ColorRGB, tile: Tile, day_fraction: float) -> ColorRGB:
