@@ -522,10 +522,7 @@ class Game:
         q = deque(starts)
         searched = 0
         neighbourhood = [
-            (dx, dy)
-            for dx in range(-1, 2)
-            for dy in range(-1, 2)
-            if (dx, dy) != (0, 0)
+            (dx, dy) for dx in range(-1, 2) for dy in range(-1, 2) if (dx, dy) != (0, 0)
         ]
         while q and searched < SEARCH_LIMIT:
             p = q.popleft()
@@ -647,9 +644,7 @@ class Game:
             if bpname == "TownHall":
                 continue
             built = [
-                b
-                for b in self.buildings
-                if b.blueprint.name == bpname and b.complete
+                b for b in self.buildings if b.blueprint.name == bpname and b.complete
             ]
             if not built:
                 continue
@@ -724,18 +719,19 @@ class Game:
 
     def _next_upgrade_hint(self) -> List[str]:
         th = self._townhall()
-        lines: List[str] = []
         reqs = self._townhall_requirements()
         if not (self._can_upgrade(th) and self._meets_townhall_requirements()):
-            lines.append(f"Next: TownHall -> L{th.level + 1}")
+            parts = []
             for name, (cnt, lvl) in reqs.items():
                 have = self._count_buildings(name, lvl)
-                lines.append(f"{name}: {have}/{cnt} lvl>= {lvl}")
+                parts.append(f"{name}: {have}/{cnt}")
+            req_str = ", ".join(parts)
             w, s = th.upgrade_cost()
-            lines.append(f"Cost W:{w} S:{s}")
-        else:
-            lines.append("TownHall ready to upgrade")
-        return lines
+            return [
+                f"Next: TownHall -> L{th.level + 1} ({req_str})",
+                f"Cost W:{w} S:{s}",
+            ]
+        return ["TownHall ready to upgrade"]
 
     def _village_goals_hint(self) -> List[str]:
         """Return static high level village goals for display."""
