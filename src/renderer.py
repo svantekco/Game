@@ -52,6 +52,13 @@ class Renderer:
     def __init__(self) -> None:
         if _HAS_BLESSED:
             self.term = Terminal()
+            if not self.term.does_styling:
+                # Force colour output when blessed detects a non-tty stream.
+                # Some environments mis-report TTY capabilities which causes
+                # ``does_styling`` to be ``False`` even though ANSI colours are
+                # supported.  Recreate the ``Terminal`` with ``force_styling``
+                # enabled so the renderer always emits colour escape codes.
+                self.term = Terminal(force_styling=True)
             self.use_curses = False
         else:
             self.term = curses.initscr()
