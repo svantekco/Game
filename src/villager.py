@@ -147,7 +147,40 @@ class Villager:
         return False
 
     def _avoid_nearby_villagers(self, game: "Game") -> bool:
-        """Disabled: previously stepped away from nearby villagers."""
+        """Step aside when too many villagers occupy the same area."""
+        nearby = [
+            v
+            for v in game.entities
+            if v is not self and abs(v.x - self.x) <= 1 and abs(v.y - self.y) <= 1
+        ]
+        if len(nearby) < 2:
+            return False
+
+        options = [
+            (self.x + 1, self.y),
+            (self.x - 1, self.y),
+            (self.x, self.y + 1),
+            (self.x, self.y - 1),
+        ]
+        random.shuffle(options)
+        for nx, ny in options:
+            if not (0 <= nx < game.map.width and 0 <= ny < game.map.height):
+                continue
+            if any(v.position == (nx, ny) for v in game.entities if v is not self):
+                continue
+            tile = game.map.get_tile(nx, ny)
+            if not tile.passable:
+                continue
+            blocked = False
+            for b in game.buildings:
+                cells = b.cells() if hasattr(b, "cells") else [b.position]
+                if (nx, ny) in cells and not b.passable:
+                    blocked = True
+                    break
+            if blocked:
+                continue
+            self.target_path = [(nx, ny)]
+            return self._move_step(game)
         return False
 
     def _move_step(self, game: "Game") -> bool:
