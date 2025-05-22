@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import heapq
 import logging
+import random
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
@@ -20,14 +21,18 @@ class _Node:
 
 def _neighbors(pos: Tuple[int, int], gmap: GameMap) -> Iterable[Tuple[int, int]]:
     x, y = pos
+    neighbors: List[Tuple[int, int]] = []
     if x > 0:
-        yield (x - 1, y)
+        neighbors.append((x - 1, y))
     if x < gmap.width - 1:
-        yield (x + 1, y)
+        neighbors.append((x + 1, y))
     if y > 0:
-        yield (x, y - 1)
+        neighbors.append((x, y - 1))
     if y < gmap.height - 1:
-        yield (x, y + 1)
+        neighbors.append((x, y + 1))
+    random.shuffle(neighbors)
+    for n in neighbors:
+        yield n
 
 
 def _passable(pos: Tuple[int, int], gmap: GameMap, buildings: Iterable[object]) -> bool:
