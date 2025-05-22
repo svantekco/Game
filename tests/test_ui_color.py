@@ -9,11 +9,11 @@ def test_ui_fixed_colour(monkeypatch):
 
     called = {}
 
-    def fake_color_rgb(r, g, b):
-        called["rgb"] = (r, g, b)
+    def fake_color(idx):
+        called["idx"] = idx
         return ""
 
-    monkeypatch.setattr(renderer.term, "color_rgb", fake_color_rgb)
+    monkeypatch.setattr(renderer.term.__class__, "color", lambda self, idx: fake_color(idx))
 
     class Dummy:
         def write(self, s):
@@ -26,4 +26,31 @@ def test_ui_fixed_colour(monkeypatch):
 
     renderer.draw_grid([["X"]], [[Color.UI]])
 
-    assert called["rgb"] == UI_COLOR_RGB
+    expected = Renderer._rgb_to_ansi256(*UI_COLOR_RGB)
+    assert called["idx"] == expected
+
+
+def test_ui_no_colour(monkeypatch):
+    renderer = Renderer(use_color=False)
+    monkeypatch.setattr(renderer.term, "move_xy", lambda x, y: "")
+
+    called = {}
+
+    def fake_color(idx):
+        called["idx"] = idx
+        return ""
+
+    monkeypatch.setattr(renderer.term.__class__, "color", lambda self, idx: fake_color(idx))
+
+    class Dummy:
+        def write(self, s):
+            pass
+
+        def flush(self):
+            pass
+
+    monkeypatch.setattr(sys, "stdout", Dummy())
+
+    renderer.draw_grid([["X"]], [[Color.UI]])
+
+    assert "idx" not in called

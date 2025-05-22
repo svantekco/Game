@@ -49,7 +49,7 @@ class Renderer:
         Color.MARKET_ZONE: "bold_blue",
     }
 
-    def __init__(self) -> None:
+    def __init__(self, *, use_color: bool = True) -> None:
         if _HAS_BLESSED:
             self.term = Terminal()
             self.use_curses = False
@@ -57,12 +57,22 @@ class Renderer:
             self.term = curses.initscr()
             self.use_curses = True
 
+        self.use_color = use_color
+
         # Track previously rendered frame so we can update only changed
         # positions. Each element mirrors the glyph/color grid passed to
         # ``draw_grid``.
         self._last_glyphs: list[list[str]] | None = None
         self._last_colors: list[list[object | None]] | None = None
         self._last_size: tuple[int, int] = (0, 0)
+
+    @staticmethod
+    def _rgb_to_ansi256(r: int, g: int, b: int) -> int:
+        """Approximate an RGB tuple with the closest ANSI 256 colour."""
+        r_idx = round(r / 255 * 5)
+        g_idx = round(g / 255 * 5)
+        b_idx = round(b / 255 * 5)
+        return 16 + 36 * r_idx + 6 * g_idx + b_idx
 
     def clear(self) -> None:
         if self.use_curses:
@@ -105,16 +115,14 @@ class Renderer:
         else:
 
             def apply_color(text: str, color: object | None) -> str:
-                if color is None:
+                if not self.use_color or color is None:
                     return text
                 if isinstance(color, tuple):
-                    if hasattr(self.term, "color_rgb"):
-                        return self.term.color_rgb(*color) + text
-                    return text
+                    idx = self._rgb_to_ansi256(*color)
+                    return self.term.color(idx) + text
                 if color is Color.UI:
-                    if hasattr(self.term, "color_rgb"):
-                        return self.term.color_rgb(*self.UI_RGB) + text
-                    return text
+                    idx = self._rgb_to_ansi256(*self.UI_RGB)
+                    return self.term.color(idx) + text
                 attr = self.COLOR_ATTRS.get(color)
                 if attr and hasattr(self.term, attr):
                     return getattr(self.term, attr)(text)
@@ -164,7 +172,7 @@ class Renderer:
                 glyph = "~"
         else:
             if tile is TileType.GRASS:
-                glyph = "G"
+                glyph = " "
             elif tile is TileType.TREE:
                 glyph = "T"
             elif tile is TileType.ROCK:
@@ -340,8 +348,8 @@ class Renderer:
             self.term.refresh()
         else:
             prefix = (
-                self.term.color_rgb(*self.UI_RGB)
-                if hasattr(self.term, "color_rgb")
+                self.term.color(self._rgb_to_ansi256(*self.UI_RGB))
+                if self.use_color
                 else ""
             )
             sys.stdout.write(self.term.move_xy(0, STATUS_PANEL_Y) + prefix + line)
@@ -361,8 +369,8 @@ class Renderer:
                 self.term.addstr(y, 0, line[:width])
             else:
                 prefix = (
-                    self.term.color_rgb(*self.UI_RGB)
-                    if hasattr(self.term, "color_rgb")
+                    self.term.color(self._rgb_to_ansi256(*self.UI_RGB))
+                    if self.use_color
                     else ""
                 )
                 sys.stdout.write(self.term.move_xy(0, y) + prefix + line)
@@ -385,8 +393,8 @@ class Renderer:
                 self.term.addstr(y, 0, line[:width])
             else:
                 prefix = (
-                    self.term.color_rgb(*self.UI_RGB)
-                    if hasattr(self.term, "color_rgb")
+                    self.term.color(self._rgb_to_ansi256(*self.UI_RGB))
+                    if self.use_color
                     else ""
                 )
                 sys.stdout.write(self.term.move_xy(0, y) + prefix + line)

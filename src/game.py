@@ -43,7 +43,9 @@ class Job:
 class Game:
     """Owns game state and runs the main loop."""
 
-    def __init__(self, seed: int | None = None, preview: bool = False) -> None:
+    def __init__(
+        self, seed: int | None = None, preview: bool = False, *, use_color: bool = True
+    ) -> None:
         random.seed(seed)
         self.map = GameMap(seed=seed)
         if preview:
@@ -137,7 +139,7 @@ class Game:
         self.tile_usage: Dict[Tuple[int, int], int] = defaultdict(int)
         self.reservations: Dict[Tuple[int, int], Tuple[int, TileType]] = {}
 
-        self.renderer = Renderer()
+        self.renderer = Renderer(use_color=use_color)
         self.camera = Camera()
         # Start zoomed in
         self.camera.set_zoom_level(0)
@@ -522,10 +524,7 @@ class Game:
         q = deque(starts)
         searched = 0
         neighbourhood = [
-            (dx, dy)
-            for dx in range(-1, 2)
-            for dy in range(-1, 2)
-            if (dx, dy) != (0, 0)
+            (dx, dy) for dx in range(-1, 2) for dy in range(-1, 2) if (dx, dy) != (0, 0)
         ]
         while q and searched < SEARCH_LIMIT:
             p = q.popleft()
