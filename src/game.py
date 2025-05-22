@@ -503,22 +503,35 @@ class Game:
         self, blueprint: BuildingBlueprint, zone: Zone | None = None
     ) -> Optional[Tuple[int, int]]:
         if zone is not None:
-            for y in range(zone.y, zone.y + zone.height):
-                for x in range(zone.x, zone.x + zone.width):
-                    if self.is_area_free((x, y), blueprint):
-                        return (x, y)
+            candidates = [
+                (x, y)
+                for y in range(zone.y, zone.y + zone.height)
+                for x in range(zone.x, zone.x + zone.width)
+            ]
+            random.shuffle(candidates)
+            for x, y in candidates:
+                if self.is_area_free((x, y), blueprint):
+                    return (x, y)
             return None
 
         from collections import deque
 
         starts = [b.position for b in self.buildings] or [self.storage_pos]
+        random.shuffle(starts)
         visited = set(starts)
         q = deque(starts)
         searched = 0
+        neighbourhood = [
+            (dx, dy)
+            for dx in range(-1, 2)
+            for dy in range(-1, 2)
+            if (dx, dy) != (0, 0)
+        ]
         while q and searched < SEARCH_LIMIT:
             p = q.popleft()
             searched += 1
-            for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+            random.shuffle(neighbourhood)
+            for dx, dy in neighbourhood:
                 cand = (p[0] + dx, p[1] + dy)
                 if cand in visited:
                     continue
