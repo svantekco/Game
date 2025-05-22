@@ -164,7 +164,7 @@ class Renderer:
                 glyph = "~"
         else:
             if tile is TileType.GRASS:
-                glyph = "G"
+                glyph = "."
             elif tile is TileType.TREE:
                 glyph = "T"
             elif tile is TileType.ROCK:
