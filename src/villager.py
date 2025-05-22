@@ -347,6 +347,8 @@ class Villager:
                     game.buildings,
                     search_limit=game.get_search_limit(),
                     avoid=avoid,
+                    spacing=3,
+                    area=10,
                 )
                 if pos is None or not game.reserve_resource(pos, self.id, resource_type):
                     self._wander(game)

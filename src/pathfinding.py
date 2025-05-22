@@ -150,6 +150,8 @@ def find_nearest_resource(
     *,
     search_limit: int = SEARCH_LIMIT,
     avoid: Iterable[Tuple[int, int]] | None = None,
+    spacing: int = 0,
+    area: int = 10,
 ) -> Tuple[Optional[Tuple[int, int]], List[Tuple[int, int]]]:
     """Return the nearest tile of ``resource_type`` using BFS."""
     if buildings is None:
@@ -157,7 +159,36 @@ def find_nearest_resource(
     if avoid is None:
         avoid = []
     avoid_set = set(avoid)
+
     from collections import deque
+
+    if spacing > 0:
+        half = area // 2
+        q = deque([(start, [start])])
+        visited = {start}
+        while q:
+            pos, path = q.popleft()
+            if (
+                abs(pos[0] - start[0]) > half
+                or abs(pos[1] - start[1]) > half
+            ):
+                continue
+            tile = gmap.get_tile(*pos)
+            if (
+                tile.type is resource_type
+                and tile.resource_amount > 0
+                and pos not in avoid_set
+                and all(
+                    abs(pos[0] - ax) + abs(pos[1] - ay) >= spacing
+                    for ax, ay in avoid_set
+                )
+            ):
+                return pos, path
+            for n in _neighbors(pos, gmap):
+                if n in visited or not _passable(n, gmap, buildings):
+                    continue
+                visited.add(n)
+                q.append((n, path + [n]))
 
     q = deque([(start, [start])])
     visited = {start}
@@ -181,3 +212,5 @@ def find_nearest_resource(
 
     logger.debug("find_nearest_resource exhausted search from %s", start)
     return None, []
+
+
