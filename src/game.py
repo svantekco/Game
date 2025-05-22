@@ -136,6 +136,7 @@ class Game:
 
         self.tile_usage: Dict[Tuple[int, int], int] = defaultdict(int)
         self.reservations: Dict[Tuple[int, int], Tuple[int, TileType]] = {}
+        self._last_road_plan_day = -1
 
         self.renderer = Renderer()
         self.camera = Camera()
@@ -313,14 +314,19 @@ class Game:
         self.jobs.append(Job("build", building, target_villager=builder.id))
 
     def _plan_roads(self) -> None:
-        """Build roads on frequently used tiles every minute."""
-        # Build roads frequently so progression remains visible during tests.
-        # Using a fixed interval of 500 ticks ensures at least one new road
-        # appears between each progress check.
-        if self.tick_count % 500 != 0:
+        """Build roads on frequently used tiles once per day at midnight."""
+        # Only place new road blueprints at the start of each day based on
+        # usage from the previous day.
+        if self.world.time_of_day != "00:00":
+            return
+        if getattr(self, "_last_road_plan_day", -1) == self.world.day:
+            return
+        if self.build_queue:
             return
         road_bp = self.blueprints["Road"]
         if self.storage["stone"] < road_bp.stone:
+            self.tile_usage.clear()
+            self._last_road_plan_day = self.world.day
             return
         # Select top 5 most used tiles
         candidates = sorted(
@@ -340,6 +346,7 @@ class Game:
             self.buildings.append(building)
             self._assign_builder(building, Role.ROAD_PLANNER)
         self.tile_usage.clear()
+        self._last_road_plan_day = self.world.day
 
     def _produce_food(self) -> None:
         """Generate food from completed farms periodically."""
@@ -637,26 +644,21 @@ class Game:
             if b.blueprint.name == name and b.level >= min_level and b.complete
         )
 
-    def _townhall_requirements(self) -> Dict[str, Tuple[int, int]]:
+    def _townhall_requirements(self) -> Dict[str, int]:
+        """Return minimal building counts required for the next upgrade."""
         th = self._townhall()
-        reqs: Dict[str, Tuple[int, int]] = {}
-        for bpname, bp in self.blueprints.items():
-            if bpname == "TownHall":
+        reqs: Dict[str, int] = {}
+        for bpname in self.blueprints:
+            if bpname in ("TownHall", "Road"):
                 continue
-            built = [
-                b for b in self.buildings if b.blueprint.name == bpname and b.complete
-            ]
-            if not built:
-                continue
-            avg_level = sum(b.level for b in built) / len(built)
-            reqs[bpname] = (th.level + 1, int(avg_level) + 1)
+            if self._count_buildings(bpname) > 0:
+                reqs[bpname] = th.level
         return reqs
 
     def _meets_townhall_requirements(self) -> bool:
         reqs = self._townhall_requirements()
-        for name, (cnt, lvl) in reqs.items():
-            built = self._count_buildings(name, lvl)
-            if built < cnt:
+        for name, cnt in reqs.items():
+            if self._count_buildings(name) < cnt:
                 return False
         return True
 
@@ -687,9 +689,11 @@ class Game:
 
     def _plan_townhall_progress(self) -> None:
         """Enqueue buildings and upgrades required for the next Town Hall level."""
+        if self.build_queue:
+            return
         reqs = self._townhall_requirements()
         # Build additional structures if counts are too low
-        for name, (count, level) in reqs.items():
+        for name, count in reqs.items():
             built = [b for b in self.buildings if b.blueprint.name == name]
             bp = self.blueprints[name]
             if len(built) < count:
@@ -713,7 +717,7 @@ class Game:
                         self._assign_builder(building, Role.BUILDER)
                         return
             for b in built:
-                if b.level < level and self._can_upgrade(b):
+                if b.level < self._townhall().level and self._can_upgrade(b):
                     self._upgrade_building(b)
                     return
 
@@ -722,8 +726,8 @@ class Game:
         reqs = self._townhall_requirements()
         if not (self._can_upgrade(th) and self._meets_townhall_requirements()):
             parts = []
-            for name, (cnt, lvl) in reqs.items():
-                have = self._count_buildings(name, lvl)
+            for name, cnt in reqs.items():
+                have = self._count_buildings(name)
                 parts.append(f"{name}: {have}/{cnt}")
             req_str = ", ".join(parts)
             w, s = th.upgrade_cost()
@@ -745,6 +749,8 @@ class Game:
 
     def _expand_housing(self) -> None:
         """Construct additional houses when population hits capacity."""
+        if self.build_queue:
+            return
         house_bp = self.blueprints["House"]
         houses = len([b for b in self.buildings if b.blueprint.name == "House"])
         if (
