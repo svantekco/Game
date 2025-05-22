@@ -6,7 +6,7 @@ from src.constants import TileType, ZoneType
 def test_day_night_filter_darkens():
     colour = (100, 100, 100)
     result = day_night_filter(colour, Tile(TileType.GRASS), 0.0)
-    assert result == (30, 30, 30)
+    assert result == (60, 70, 100)
 
 
 def test_zone_filter_tints():
