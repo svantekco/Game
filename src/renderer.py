@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import time
 import logging
+import os
 from typing import TYPE_CHECKING
 
 from .constants import Color, TileType, STATUS_PANEL_Y, Mood, UI_COLOR_RGB
@@ -51,7 +52,15 @@ class Renderer:
 
     def __init__(self) -> None:
         if _HAS_BLESSED:
-            self.term = Terminal()
+            # Always force styling so ANSI colour codes are emitted even when
+            # the output stream is not detected as a TTY.  Some environments
+            # mis-report capabilities which leaves ``does_styling`` disabled,
+            # resulting in a monochrome display.  Using ``force_styling=True``
+            # ensures colour output regardless of the detected terminal kind.
+            # ``kind`` defaults to the ``TERM`` environment variable, falling
+            # back to ``xterm-256color`` for robust colour support.
+            term_kind = os.environ.get("TERM", "xterm-256color")
+            self.term = Terminal(kind=term_kind, force_styling=True)
             self.use_curses = False
         else:
             self.term = curses.initscr()
