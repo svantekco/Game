@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 import time
 import logging
@@ -51,7 +52,41 @@ class Renderer:
 
     def __init__(self) -> None:
         if _HAS_BLESSED:
+            term_env = os.environ.get("TERM")
+            if not term_env:
+                os.environ["TERM"] = "xterm-256color"
+                term_env = "xterm-256color"
+                logger.info("TERM not set, defaulting to %s", term_env)
+
             self.term = Terminal()
+            logger.info(
+                "Initial terminal detection: TERM=%s, kind=%s, styling=%s, colors=%s, RGB=%s",
+                term_env,
+                self.term.kind,
+                self.term.does_styling,
+                getattr(self.term, "number_of_colors", "N/A"),
+                getattr(self.term, "_does_rgb", "N/A"),
+            )
+
+            if not self.term.does_styling:
+                logger.warning("Styling disabled, forcing color output")
+                # Force colour output when blessed detects a non-tty stream.
+                # Some environments mis-report TTY capabilities which causes
+                # ``does_styling`` to be ``False`` even though ANSI colours are
+                # supported.  Recreate the ``Terminal`` with ``force_styling``
+                # enabled so the renderer always emits colour escape codes.
+                self.term = Terminal(force_styling=True)
+                logger.info(
+                    "After forcing: kind=%s, styling=%s, colors=%s, RGB=%s",
+                    self.term.kind,
+                    self.term.does_styling,
+                    getattr(self.term, "number_of_colors", "N/A"),
+                    getattr(self.term, "_does_rgb", "N/A"),
+                )
+            logger.info(
+                "RGB test: %s",
+                self.term.color_rgb(255, 0, 0)("TRUECOLOR TEST (should be red)"),
+            )
             self.use_curses = False
         else:
             self.term = curses.initscr()
