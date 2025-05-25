@@ -11,5 +11,6 @@ BLUEPRINT = BuildingBlueprint(
     color=Color.BUILDING,
     wood=20,
     stone=20,
+    capacity_bonus=50,
     passable=True,
 )

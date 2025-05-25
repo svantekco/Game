@@ -306,6 +306,10 @@ class Game:
 
     def _assign_builder(self, building: Building, role: Role = Role.BUILDER) -> None:
         """Assign the nearest villager with ``role`` to construct ``building``."""
+        if building.complete:
+            if building.blueprint.name == "Storage":
+                self.storage_capacity += building.blueprint.capacity_bonus
+            return
         if not self.entities:
             return
         candidates = [v for v in self.entities if v.role is role]
@@ -970,6 +974,7 @@ class Game:
             day_fraction=self.world.day_fraction,
             reserved=set(self.reservations.keys()),
         )
+        used_capacity = sum(self.storage.values())
         status = (
             f"Tick:{self.tick_count} "
             f"Day:{self.world.day} "
@@ -979,7 +984,7 @@ class Game:
             f"Wood:{self.storage['wood']} "
             f"Stone:{self.storage['stone']} "
             f"Food:{self.storage['food']} "
-            f"Cap:{self.storage_capacity} "
+            f"Cap:{used_capacity}/{self.storage_capacity} "
             f"Pop:{len(self.entities)}"
         )
         counts: Dict[Role, int] = defaultdict(int)
