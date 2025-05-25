@@ -39,9 +39,28 @@ class DummyTerminal:
     def color_rgb(self, r: int, g: int, b: int) -> str:  # pragma: no cover
         return ""
 
-    def __getattr__(self, attr: str):  # pragma: no cover - color helpers
-        def _noop(text: str | None = "") -> str:
-            return text or ""
+    def cbreak(self):  # pragma: no cover - context manager stub
+        from contextlib import nullcontext
+
+        return nullcontext()
+
+    def hidden_cursor(self):  # pragma: no cover - context manager stub
+        from contextlib import nullcontext
+
+        return nullcontext()
+
+    def inkey(self, *args, **kwargs) -> str:  # pragma: no cover - input stub
+        return ""
+
+    def getch(self) -> int:  # pragma: no cover - input stub
+        return -1
+
+    def nodelay(self, flag: bool) -> None:  # pragma: no cover - setter stub
+        pass
+
+    def __getattr__(self, attr: str):  # pragma: no cover - generic stub
+        def _noop(*_args, **_kwargs):
+            return ""
 
         return _noop
 

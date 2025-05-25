@@ -173,10 +173,7 @@ def find_nearest_resource(
         visited = {start}
         while q:
             pos, path = q.popleft()
-            if (
-                abs(pos[0] - start[0]) > half
-                or abs(pos[1] - start[1]) > half
-            ):
+            if abs(pos[0] - start[0]) > half or abs(pos[1] - start[1]) > half:
                 continue
             tile = gmap.get_tile(*pos)
             if (
@@ -217,5 +214,3 @@ def find_nearest_resource(
 
     logger.debug("find_nearest_resource exhausted search from %s", start)
     return None, []
-
-
