@@ -19,7 +19,7 @@ Powered by the **blessed** TUI library (with a curses fallback), VillageSim runs
 * **Procedural Worlds** – Seedable generator carves out a diverse, resource‑rich landscape every run.
 * **Smooth ASCII Rendering** – Panning and zoom deliver crisp visuals at multiple levels of detail.
 * **Autonomous Villagers** – Agents gather, build, and deliver via an A\* path‑finding engine you can watch in real time.
-* **Dynamic Construction** – Town Halls, Lumberyards, Houses, and Watchtowers emerge where resources allow, triggering population growth.
+* **Dynamic Construction** – Town Halls, Lumberyards, Houses, Watchtowers and Marketplaces emerge where resources allow, boosting villager mood and enabling trade.
 * **Resource Economy** – Wood and stone flow through inventories, storage, and building queues.
 * **HUD & Controls** – Real‑time stats panel plus hotkeys for pause, step, help, and camera centring.
 * **Caching & Logging** – Lighting results are cached and debug logging reveals render timings.

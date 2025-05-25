@@ -9,10 +9,12 @@ from ..building import BuildingBlueprint
 BLUEPRINTS: dict[str, BuildingBlueprint] = {}
 package_path = Path(__file__).parent
 for path in package_path.glob("*.py"):
-    if path.name == "__init__.py":
+    if path.stem.startswith("__"):
         continue
     module_name = f"{__name__}.{path.stem}"
     module = import_module(module_name)
     bp = getattr(module, "BLUEPRINT", None)
     if isinstance(bp, BuildingBlueprint):
         BLUEPRINTS[bp.name] = bp
+
+__all__ = ["BLUEPRINTS"]
