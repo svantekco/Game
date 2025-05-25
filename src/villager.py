@@ -102,6 +102,22 @@ class Villager:
             * self._life_stage_delay_factor()
             * self._time_of_day_delay_factor(game)
         )
+
+        # Introduce a small random variation so actions don't all complete at
+        # exactly the same intervals.  Personalities and mood influence how
+        # large the jitter can be.  Industrious/happy villagers tend to be more
+        # consistent, while lazy/sad villagers vary more.
+        variation = 0.1
+        if self.personality is Personality.INDUSTRIOUS:
+            variation *= 0.8
+        elif self.personality is Personality.LAZY:
+            variation *= 1.2
+        if self.mood is Mood.HAPPY:
+            variation *= 0.8
+        elif self.mood is Mood.SAD:
+            variation *= 1.2
+        delay = int(delay * random.uniform(1 - variation, 1 + variation))
+
         return max(0, delay)
 
     def adjust_mood(self, delta: int) -> None:

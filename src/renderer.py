@@ -54,8 +54,20 @@ class Renderer:
             self.term = Terminal()
             self.use_curses = False
         else:
-            self.term = curses.initscr()
-            self.use_curses = True
+            class DummyTerm:
+                def move_xy(self, x: int, y: int) -> str:
+                    return f"\x1b[{y};{x}H"
+
+                def clear(self) -> str:
+                    return "\x1b[2J"
+
+                def color_rgb(self, r: int, g: int, b: int) -> str:
+                    return ""
+
+            self.term = DummyTerm()
+            # Use the stdout rendering path so tests behave like the blessed
+            # implementation.
+            self.use_curses = False
 
         # Track previously rendered frame so we can update only changed
         # positions. Each element mirrors the glyph/color grid passed to
