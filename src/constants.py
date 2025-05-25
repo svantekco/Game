@@ -22,8 +22,9 @@ UI_PANEL_HEIGHT = 10
 VIEWPORT_HEIGHT = 42 - UI_PANEL_HEIGHT
 # Y coordinate where the status line is rendered
 STATUS_PANEL_Y = VIEWPORT_HEIGHT
-# Discrete zoom levels: 1 cell per tile, 2 cells per tile, etc.
-ZOOM_LEVELS = [1, 2, 4]
+# Discrete zoom levels.  Only a single fixed zoom is now used
+# so the camera always renders one cell per tile.
+ZOOM_LEVELS = [1]
 DEFAULT_ZOOM_INDEX = 0
 
 # Game tick rate (ticks per second)
@@ -52,6 +53,21 @@ SEARCH_LIMIT = 50000
 
 # Fixed colour for all UI elements (RGB)
 UI_COLOR_RGB = (255, 255, 255)
+
+# Distinct colours used to differentiate villages.  These are
+# RGB tuples so buildings can override the default palette on a
+# per-village basis.
+VILLAGE_COLORS = [
+    (255, 0, 0),
+    (0, 255, 0),
+    (0, 0, 255),
+    (255, 255, 0),
+    (255, 0, 255),
+    (0, 255, 255),
+    (200, 100, 50),
+    (100, 50, 200),
+    (50, 200, 100),
+]
 
 
 class Color(Enum):
