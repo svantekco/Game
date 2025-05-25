@@ -589,6 +589,8 @@ class Villager:
                         j for j in game.jobs if j.payload is not self.target_building
                     ]
                     self.target_building.builder_id = None
+                    if self.target_building.blueprint.name == "Storage":
+                        game.storage_capacity += self.target_building.blueprint.capacity_bonus
                     if self.target_building.blueprint.name == "House":
                         game.schedule_spawn(self.target_building.position)
                 else:

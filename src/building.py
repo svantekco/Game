@@ -19,6 +19,7 @@ class BuildingBlueprint:
     stone: int = 0
     capacity: int = 0
     efficiency: float = 1.0
+    capacity_bonus: int = 0
     # If True the completed building can be walked over
     passable: bool = False
 
