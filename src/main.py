@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 
-from .game import Game
+from .multigame import MultiGame
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -23,7 +23,7 @@ def main(argv: list[str] | None = None) -> None:
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
 
-    game = Game(seed=args.seed, preview=args.preview)
+    game = MultiGame(seed=args.seed, preview=args.preview)
     game.run(show_fps=args.show_fps)
 
 
