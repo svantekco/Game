@@ -22,8 +22,8 @@ UI_PANEL_HEIGHT = 10
 VIEWPORT_HEIGHT = 42 - UI_PANEL_HEIGHT
 # Y coordinate where the status line is rendered
 STATUS_PANEL_Y = VIEWPORT_HEIGHT
-# Discrete zoom levels: 1 cell per tile, 2 cells per tile, etc.
-ZOOM_LEVELS = [1, 2, 4]
+# Discrete zoom levels - zoom has been removed so only a single level remains
+ZOOM_LEVELS = [1]
 DEFAULT_ZOOM_INDEX = 0
 
 # Game tick rate (ticks per second)
@@ -119,3 +119,4 @@ class Role(Enum):
     MINER = auto()
     ROAD_PLANNER = auto()
     LABOURER = auto()
+    EXPLORER = auto()

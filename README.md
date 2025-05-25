@@ -8,7 +8,7 @@ Lighting now uses a four-step hue cycle (night, morning, afternoon and evening) 
 
 Rather than micromanaging individual settlers, you watch emergent stories unfold.  Each villager is an autonomous entity that can plan paths, gather resources, construct buildings, and deliver supplies back to storage, all while navigating a living landscape that reacts to their actions.  A simple finite‑state machine turns a lone labourer into a self‑sufficient workforce that knows when to chop, haul, build, and rest.
 
-As timber stacks in the Town Hall and stone fills the storehouses, the settlement expands organically.  New houses appear, population grows, and specialised structures—lumberyards today, perhaps blacksmiths tomorrow—push the frontier ever outward.  Your view glides across the world thanks to a smooth camera and zoomable levels of detail, letting you follow a single villager’s journey or take in the whole realm at a glance.
+As timber stacks in the Town Hall and stone fills the storehouses, the settlement expands organically.  New houses appear, population grows, and specialised structures—lumberyards today, perhaps blacksmiths tomorrow—push the frontier ever outward.  Your view glides across the world thanks to a smooth camera, letting you follow a single villager’s journey or take in the whole realm at a glance.
 
 Powered by the **blessed** TUI library (with a curses fallback), VillageSim runs anywhere a Python interpreter does—headless servers, SSH sessions, or handhelds—while remaining easy to extend.  The codebase is modular, each subsystem capped at 10 k tokens, making it an ideal playground for experimenting with path‑finding, AI behaviours, and large‑world rendering in a tiny footprint.
 
@@ -17,7 +17,7 @@ Powered by the **blessed** TUI library (with a curses fallback), VillageSim runs
 ## Feature Highlights
 
 * **Procedural Worlds** – Seedable generator carves out a diverse, resource‑rich landscape every run.
-* **Smooth ASCII Rendering** – Panning and zoom deliver crisp visuals at multiple levels of detail.
+* **Smooth ASCII Rendering** – Panning across the map delivers crisp visuals.
 * **Autonomous Villagers** – Agents gather, build, and deliver via an A\* path‑finding engine you can watch in real time.
 * **Dynamic Construction** – Town Halls, Lumberyards, Houses, and Watchtowers emerge where resources allow, triggering population growth.
 * **Resource Economy** – Wood and stone flow through inventories, storage, and building queues.
@@ -29,7 +29,7 @@ Powered by the **blessed** TUI library (with a curses fallback), VillageSim runs
 
 VillageSim runs on a simple tick loop managed by the `Game` class. During each tick the game:
 
-1. Processes input to move or zoom the camera and toggle overlays.
+1. Processes input to move the camera and toggle overlays.
 2. Updates every `Villager` using a finite‑state machine with `idle`, `gather`, `deliver` and `build` states.
 3. Dispatches jobs so villagers collect resources or work on buildings.
 4. Spawns new villagers from completed houses, produces food at farms and plans roads on frequently used tiles.
@@ -62,16 +62,30 @@ $ python3 -m src.main [--seed 42] [--show-fps] [-v]
 | Key       | Action           |
 | --------- | ---------------- |
 | WASD      | Pan camera       |
-| `+` / `-` | Zoom in / out    |
+| `1`-`9`   | Switch village   |
 | `space`   | Pause / Unpause  |
 | `.`       | Single‑step tick |
 | `c`       | Center camera    |
 | `h`       | Toggle help pane |
 | `q`       | Quit             |
 
-The bottom row shows the current tick, current day, camera position/zoom,
-stored resources and population. Use `--show-fps` to display performance metrics. Pass `-v` to
-enable debug logging which now reports render timing and lighting cost.
+The bottom row shows the current tick, current day, camera position and active
+village. Stored resource counts are also displayed. Use `--show-fps` to display
+performance metrics.
+## Troubleshooting
+
+If the game fails to start or immediately exits:
+
+1. Activate your virtual environment and run `pip install -r requirements.txt`.
+2. Ensure your terminal supports 256 colours; set `TERM=xterm-256color` if
+   needed.
+3. Try running with the `--preview` flag to verify your terminal can render the
+   game.
+4. Use `-v` for verbose logs which may reveal missing libraries or other
+   errors.
+
+Performance metrics are shown with `--show-fps`. Pass `-v` to enable debug
+logging which reports render timing and lighting cost.
 
 ---
 
@@ -81,7 +95,7 @@ enable debug logging which now reports render timing and lighting cost.
 2. **Core constants and enums** – World size, tile types, colours, tick rate.
 3. **Tile & map data structures** – `Tile` class and 1 000 × 1 000 grid generator.
 4. **Renderer skeleton** – Blessed‑powered screen clear & glyph draw.
-5. **Camera & viewport logic** – World‑to‑screen transforms, panning, zoom.
+5. **Camera & viewport logic** – World‑to‑screen transforms, panning.
 6. **Input handling loop** – Non‑blocking key capture dispatched to camera/game.
 7. **Game class with tick scheduler** – Update‑then‑render at 60 Hz.
 8. **Villager entity & rendering** – `@` glyph overlay with per‑agent colours.
@@ -95,7 +109,7 @@ enable debug logging which now reports render timing and lighting cost.
 16. **Lumberyard auto‑expansion** – Resource‑driven growth logic.
 17. **House & population growth** – Housing cap and villager spawning.
 18. **UI overlay & controls** – Status panel, help screen, CLI flags.
-19. **Zoom‑level LOD & perf flags** – Glyph swap at low zoom, FPS monitor.
+19. **LOD & perf flags** – Glyph swap at distant view, FPS monitor.
 20. **Testing, docs & CI** – Unit tests, expanded README, GitHub Actions.
 
 Each task is scoped to ≤ 10 k tokens, perfect for iteratively feeding to an agentic LLM.

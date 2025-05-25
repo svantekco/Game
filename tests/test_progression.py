@@ -19,12 +19,9 @@ def test_progress_over_time():
         if tick % 500 == 0:
             current_storage = dict(game.storage)
             current_buildings = len(game.buildings)
-            log.append(
-                (tick, current_storage.copy(), current_buildings)
-            )
+            log.append((tick, current_storage.copy(), current_buildings))
             assert (
-                current_storage != prev_storage
-                or current_buildings != prev_buildings
+                current_storage != prev_storage or current_buildings != prev_buildings
             ), f"No progress at tick {tick}; log so far: {log}"
             prev_storage = current_storage
             prev_buildings = current_buildings

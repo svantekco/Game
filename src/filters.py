@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from typing import Callable, Iterable, Tuple, Dict
 import logging
-import math
 
 from .constants import TileType, ZoneType
 from .tile import Tile
