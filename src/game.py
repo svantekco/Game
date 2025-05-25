@@ -52,12 +52,13 @@ class Game:
         self.buildings: List[Building] = []
         self.build_queue: List[Building] = []
         self.jobs: List[Job] = []
-        # Gather only the bare minimum wood required for initial structures.
-        # Lowering this threshold ensures stone gathering starts early enough
-        # for automated tests to observe progress within the first game day.
-        self.wood_threshold = 0
+        # Focus early gameplay on gathering wood for the very first house.
+        # Villagers will now collect enough wood for construction before
+        # attempting other resource types.
+        self.wood_threshold = 15
         self.stone_threshold = 40
-        self.house_threshold = 50
+        # Trigger house construction as soon as sufficient wood is available.
+        self.house_threshold = 15
         self.next_entity_id = 2
         self.pending_spawns: List[Tuple[int, Tuple[int, int], int, LifeStage]] = []
         self.event_log: List[str] = []
@@ -117,6 +118,11 @@ class Game:
             self.map.add_zone(z)
             self._clear_zone(z)
             self.zones[z.type] = z
+
+        # Start with no usable wood so the first villager must gather
+        # resources for the initial house rather than relying on the
+        # stockpile created when clearing zones.
+        self.storage["wood"] = 0
 
         # Spawn a small nearby rock deposit so the first villager can
         # gather stone without travelling across the map. This avoids a long
@@ -604,6 +610,11 @@ class Game:
                         return self.jobs.pop(i)
                     if villager.role is Role.LABOURER:
                         return self.jobs.pop(i)
+
+        # Before any houses exist, prioritise wood gathering so the first
+        # villager works toward building initial shelter.
+        if self._count_buildings("House") == 0 and self.storage["wood"] < self.house_threshold:
+            return Job("gather", TileType.TREE)
 
         # Role specific default tasks
         if villager.role is Role.WOODCUTTER:
