@@ -1,6 +1,5 @@
 from src.world import World
 from src.game import Game
-from src.building import Building
 
 
 def test_world_day_night_toggle():
