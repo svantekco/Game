@@ -266,7 +266,7 @@ class Renderer:
                     if callable(render_fn):
                         glyph, color = render_fn()
                     else:
-                        glyph, color = b.blueprint.glyph, b.blueprint.color
+                        glyph, color = b.blueprint.glyph, getattr(b, "color", b.blueprint.color)
 
                     if b.blueprint.name == "Road" and getattr(b, "complete", False):
                         n = any(

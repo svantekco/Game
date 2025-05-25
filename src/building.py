@@ -37,11 +37,13 @@ class Building:
     capacity: int = 0
     efficiency: float = 1.0
     builder_id: int | None = None
+    color: object | None = None
 
     def __post_init__(self) -> None:
         """Initialise stats from the blueprint."""
         self.capacity = self.blueprint.capacity
         self.efficiency = self.blueprint.efficiency
+        self.color = self.blueprint.color
 
     # ---------------------------------------------------------------
     def upgrade_cost(self) -> Tuple[int, int]:
@@ -70,11 +72,11 @@ class Building:
         return self.progress >= self.blueprint.build_time
 
     # ------------------------------------------------------------------
-    def glyph_for_progress(self) -> tuple[str, Color]:
+    def glyph_for_progress(self) -> tuple[str, object]:
         """Return a glyph and colour based on construction progress."""
 
         if self.complete or self.blueprint.build_time <= 0:
-            return self.blueprint.glyph, self.blueprint.color
+            return self.blueprint.glyph, self.color
 
         ratio = self.progress / self.blueprint.build_time
         if ratio < 1 / 3:
@@ -84,4 +86,4 @@ class Building:
         else:
             glyph = self.blueprint.glyph.lower()
 
-        return glyph, self.blueprint.color
+        return glyph, self.color

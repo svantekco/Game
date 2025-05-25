@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import random
 import time
+import math
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
@@ -18,6 +19,7 @@ from .constants import (
     ZoneType,
     LifeStage,
     Role,
+    VILLAGE_COLORS,
 )
 
 from .building import BuildingBlueprint, Building
@@ -81,6 +83,7 @@ class Game:
         townhall.progress = townhall.blueprint.build_time
         townhall.passable = True
         self.buildings.append(townhall)
+        self.townhalls: List[Building] = [townhall]
 
         # Place initial Storage building 5 tiles east of the Town Hall
         candidate = (self.townhall_pos[0] + 5, self.townhall_pos[1])
@@ -815,6 +818,47 @@ class Game:
                 self.buildings.append(building)
                 self._assign_builder(building, Role.BUILDER)
 
+    def _maybe_spawn_new_village(self) -> None:
+        """Occasionally send an explorer to found a new village."""
+        cost = 100 * len(self.townhalls)
+        if (
+            self.storage.get("wood", 0) < cost
+            or self.storage.get("stone", 0) < cost
+            or self.build_queue
+        ):
+            return
+        # Small random chance each tick
+        if random.random() > 0.001:
+            return
+        origin = self.townhalls[-1].position
+        dist = random.randint(500, 1000)
+        angle = random.random() * 6.28318
+        tx = max(0, min(self.map.width - 1, origin[0] + int(dist * math.cos(angle))))
+        ty = max(0, min(self.map.height - 1, origin[1] + int(dist * math.sin(angle))))
+        pos = self._find_nearest_passable((tx, ty))
+        color = VILLAGE_COLORS[(len(self.townhalls)) % len(VILLAGE_COLORS)]
+        bp = BuildingBlueprint(
+            name=f"TownHall{len(self.townhalls)+1}",
+            build_time=10,
+            footprint=[(0, 0)],
+            glyph="H",
+            color=color,
+            wood=cost,
+            stone=cost,
+            passable=True,
+        )
+        building = Building(bp, pos)
+        self.build_queue.append(building)
+        self.buildings.append(building)
+        self.townhalls.append(building)
+        self.storage["wood"] -= cost
+        self.storage["stone"] -= cost
+        explorer = Villager(id=self.next_entity_id, position=origin, role=Role.BUILDER)
+        self.next_entity_id += 1
+        self.entities.append(explorer)
+        building.builder_id = explorer.id
+        self.jobs.append(Job("build", building, target_villager=explorer.id))
+
     # --- Game Loop -----------------------------------------------------
     def run(self, show_fps: bool = False) -> None:
         """Run the main loop until quit."""
@@ -888,9 +932,11 @@ class Game:
                     self.camera.move(0, 0, self.map.width, self.map.height)
                     self.pan_pause = 240
                 elif ord("1") <= key <= ord("9"):
-                    self.camera.set_zoom_level(key - ord("1"))
-                    self.camera.move(0, 0, self.map.width, self.map.height)
-                    self.pan_pause = 240
+                    idx = key - ord("1")
+                    if idx < len(self.townhalls):
+                        pos = self.townhalls[idx].position
+                        self.camera.center_on(pos[0], pos[1], self.map.width, self.map.height)
+                        self.pan_pause = 240
                 elif key == ord(" "):
                     self.paused = not self.paused
                 elif key == ord("."):
@@ -927,9 +973,11 @@ class Game:
                     self.camera.move(0, 0, self.map.width, self.map.height)
                     self.pan_pause = 240
                 elif key in "123456789":
-                    self.camera.set_zoom_level(int(key) - 1)
-                    self.camera.move(0, 0, self.map.width, self.map.height)
-                    self.pan_pause = 240
+                    idx = int(key) - 1
+                    if idx < len(self.townhalls):
+                        pos = self.townhalls[idx].position
+                        self.camera.center_on(pos[0], pos[1], self.map.width, self.map.height)
+                        self.pan_pause = 240
                 elif key == " ":
                     self.paused = not self.paused
                 elif key == ".":
@@ -967,6 +1015,7 @@ class Game:
         self._auto_upgrade()
         self._plan_townhall_progress()
         self._expand_housing()
+        self._maybe_spawn_new_village()
 
     def render(self) -> None:
         """Draw the current game state."""
@@ -1038,7 +1087,7 @@ class Game:
                 "h - toggle help",
                 "b - toggle buildings",
                 "q - quit",
-                "1-9 - set zoom",
+                "1-9 - centre on village",
                 "A - toggle thoughts",
             ]
             self.renderer.render_help(lines, start_y=overlay_start)
