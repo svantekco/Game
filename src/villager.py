@@ -306,15 +306,29 @@ class Villager:
             self.asleep = False
             self.state = "idle"
             self.target_path = []
-        # Head home when night falls
+        # Head home when night falls. If the house tile is not passable,
+        # walk to an adjacent tile instead of trying to path directly onto the
+        # building which would fail and cause repeated pathfinding attempts.
         if game.world.is_night and self.home and self.state != "sleep":
-            path = path_func(
-                self.position,
-                self.home,
-                game.map,
-                game.buildings,
-                search_limit=game.get_search_limit(),
+            building = next(
+                (b for b in game.buildings if b.position == self.home), None
             )
+            if building and not building.passable:
+                path = find_path_to_building_adjacent(
+                    self.position,
+                    building,
+                    game.map,
+                    game.buildings,
+                    search_limit=game.get_search_limit(),
+                )
+            else:
+                path = path_func(
+                    self.position,
+                    self.home,
+                    game.map,
+                    game.buildings,
+                    search_limit=game.get_search_limit(),
+                )
             self.target_path = path[1:]
             self.state = "sleep"
         if self.life_stage is LifeStage.RETIRED:
@@ -599,15 +613,33 @@ class Villager:
                     return
                 self.state = "idle"
         if self.state == "sleep":
-            if self.position != self.home:
+            building = next(
+                (b for b in game.buildings if b.position == self.home), None
+            )
+            at_home = self.position == self.home
+            if building and not building.passable:
+                at_home = (
+                    abs(self.position[0] - self.home[0])
+                    + abs(self.position[1] - self.home[1])
+                ) == 1
+            if not at_home:
                 if not self.target_path:
-                    path = path_func(
-                        self.position,
-                        self.home,
-                        game.map,
-                        game.buildings,
-                        search_limit=game.get_search_limit(),
-                    )
+                    if building and not building.passable:
+                        path = find_path_to_building_adjacent(
+                            self.position,
+                            building,
+                            game.map,
+                            game.buildings,
+                            search_limit=game.get_search_limit(),
+                        )
+                    else:
+                        path = path_func(
+                            self.position,
+                            self.home,
+                            game.map,
+                            game.buildings,
+                            search_limit=game.get_search_limit(),
+                        )
                     self.target_path = path[1:]
                 self._move_step(game)
             else:
