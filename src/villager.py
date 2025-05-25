@@ -111,9 +111,7 @@ class Villager:
         self.mood = levels[idx]
 
     # ------------------------------------------------------------------
-    def _move_away_from(
-        self, other: Tuple[int, int], game: "Game"
-    ) -> bool:
+    def _move_away_from(self, other: Tuple[int, int], game: "Game") -> bool:
         """Step one tile away from ``other`` if possible."""
 
         options = []
@@ -307,6 +305,9 @@ class Villager:
         if self._avoid_nearby_villagers(game):
             return
         if self.state == "idle":
+            if random.random() < 0.2:
+                self._wander(game)
+                return
             job = game.dispatch_job(self)
             if not job:
                 self.adjust_mood(-1)
@@ -350,7 +351,9 @@ class Villager:
                     spacing=3,
                     area=10,
                 )
-                if pos is None or not game.reserve_resource(pos, self.id, resource_type):
+                if pos is None or not game.reserve_resource(
+                    pos, self.id, resource_type
+                ):
                     self._wander(game)
                     return
                 self.resource_type = resource_type

@@ -20,9 +20,31 @@ try:
 
     _HAS_BLESSED = True
 except Exception:  # pragma: no cover - fallback if blessed is missing
-    import curses
-
     _HAS_BLESSED = False
+
+
+class DummyTerminal:
+    """Minimal stand-in for :class:`blessed.Terminal` used in tests."""
+
+    def __init__(self) -> None:
+        self.width = 80
+        self.height = 24
+
+    def clear(self) -> str:  # pragma: no cover - simple passthrough
+        return ""
+
+    def move_xy(self, x: int, y: int) -> str:  # pragma: no cover - simple pass
+        return ""
+
+    def color_rgb(self, r: int, g: int, b: int) -> str:  # pragma: no cover
+        return ""
+
+    def __getattr__(self, attr: str):  # pragma: no cover - color helpers
+        def _noop(text: str | None = "") -> str:
+            return text or ""
+
+        return _noop
+
 
 if TYPE_CHECKING:  # pragma: no cover - import types for checking only
     from .game import Villager, Camera
@@ -54,8 +76,9 @@ class Renderer:
             self.term = Terminal()
             self.use_curses = False
         else:
-            self.term = curses.initscr()
-            self.use_curses = True
+            # Use a simple fallback that mimics the blessed API
+            self.term = DummyTerminal()
+            self.use_curses = False
 
         # Track previously rendered frame so we can update only changed
         # positions. Each element mirrors the glyph/color grid passed to
