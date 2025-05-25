@@ -44,18 +44,16 @@ class Camera:
         self.y = min(max(self.y, 0), max_y)
 
     def zoom_in(self) -> None:
-        """Zoom in if possible."""
-        if self.zoom_index < len(ZOOM_LEVELS) - 1:
-            self.zoom_index += 1
+        """Zooming disabled - no-op."""
+        self.zoom_index = 0
 
     def zoom_out(self) -> None:
-        """Zoom out if possible."""
-        if self.zoom_index > 0:
-            self.zoom_index -= 1
+        """Zooming disabled - no-op."""
+        self.zoom_index = 0
 
     def set_zoom_level(self, index: int) -> None:
-        """Set zoom to a specific index within bounds."""
-        self.zoom_index = max(0, min(index, len(ZOOM_LEVELS) - 1))
+        """Set zoom to a specific index within bounds (single level)."""
+        self.zoom_index = 0
 
     def world_to_screen(self, wx: int, wy: int) -> tuple[int, int]:
         """Translate world coordinates to screen coordinates."""

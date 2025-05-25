@@ -301,6 +301,17 @@ class Villager:
         # enabled the optimised variant after 25k ticks which caused heavy CPU
         # load once several villagers were active early on.
         path_func = find_path_fast
+        if self.role is Role.EXPLORER:
+            if getattr(self, "explore_steps", 0) <= 0:
+                game.spawn_new_village(self.position)
+                game.entities.remove(self)
+                return
+            if not self.target_path:
+                self._wander(game)
+            else:
+                self._move_step(game)
+            self.explore_steps -= 1
+            return
         # Wake up at dawn
         if self.state == "sleep" and not game.world.is_night:
             self.asleep = False

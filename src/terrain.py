@@ -98,7 +98,6 @@ class TerrainGenerator:
             rows.append("".join(row))
         return rows
 
-
     def preview_stream(self, scale: int = 1000):
         """Yield preview rows one by one."""
         for y in range(0, self.height, scale):

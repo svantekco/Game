@@ -1,4 +1,3 @@
-import random
 import pytest
 import src.villager as villager_mod
 
