@@ -6,7 +6,7 @@ import random
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Callable
 
 from .constants import (
     TileType,
@@ -61,6 +61,7 @@ class Game:
         self.next_entity_id = 2
         self.pending_spawns: List[Tuple[int, Tuple[int, int], int, LifeStage]] = []
         self.event_log: List[str] = []
+        self.on_new_village: Callable[[Tuple[int, int]], None] | None = None
 
         # Predefined blueprints
         # Blueprints are now loaded dynamically from ``src.blueprints`` so that
@@ -227,6 +228,20 @@ class Game:
         self.next_entity_id += 1
         self.entities.append(villager)
         self._assign_home(villager)
+
+    def _spawn_explorer(self, position: Tuple[int, int]) -> None:
+        villager = Villager(
+            id=self.next_entity_id,
+            position=position,
+            role=Role.EXPLORER,
+        )
+        villager.explore_steps = 1000
+        self.next_entity_id += 1
+        self.entities.append(villager)
+
+    def spawn_new_village(self, position: Tuple[int, int]) -> None:
+        if self.on_new_village:
+            self.on_new_village(position)
 
     def _assign_home(self, villager: Villager) -> None:
         houses = [
@@ -773,6 +788,40 @@ class Game:
                 self.buildings.append(building)
                 self._assign_builder(building, Role.BUILDER)
 
+    def _random_watchtower(self) -> None:
+        """Occasionally plan a watchtower which spawns an explorer."""
+        if self.build_queue:
+            return
+        if random.random() > 0.001:
+            return
+        bp = self.blueprints["Watchtower"]
+        if self.storage["wood"] < bp.wood or self.storage["stone"] < bp.stone:
+            return
+        if any(b.blueprint.name == "Watchtower" for b in self.buildings):
+            return
+        zone = self.zones.get(ZoneType.WORK)
+        pos = self.find_build_site(bp, zone)
+        if pos is None and zone is not None:
+            self._expand_zone(zone)
+            pos = self.find_build_site(bp, zone)
+        if pos:
+            self.storage["wood"] -= bp.wood
+            self.storage["stone"] -= bp.stone
+            building = Building(bp, pos)
+            self.build_queue.append(building)
+            self.buildings.append(building)
+            self._assign_builder(building, Role.BUILDER)
+
+    def _check_watchtowers(self) -> None:
+        for b in self.buildings:
+            if (
+                b.blueprint.name == "Watchtower"
+                and b.complete
+                and not hasattr(b, "explorer_spawned")
+            ):
+                self._spawn_explorer(b.position)
+                setattr(b, "explorer_spawned", True)
+
     # --- Game Loop -----------------------------------------------------
     def run(self, show_fps: bool = False) -> None:
         """Run the main loop until quit."""
@@ -814,14 +863,15 @@ class Game:
                     sleep = max(0, (1 / self.tick_rate) - (time.perf_counter() - start))
                     time.sleep(sleep)
 
-    def update(self) -> None:
+    def update(self, key: int | str | None = None) -> None:
         """Process input and update world state."""
         term = self.renderer.term
-        if self.renderer.use_curses:
-            ch = term.getch()
-            key = ch if ch != -1 else None
-        else:
-            key = term.inkey(timeout=0)
+        if key is None:
+            if self.renderer.use_curses:
+                ch = term.getch()
+                key = ch if ch != -1 else None
+            else:
+                key = term.inkey(timeout=0)
 
         if key:
             if self.renderer.use_curses:
@@ -836,18 +886,6 @@ class Game:
                     self.pan_pause = 240
                 elif key == ord("s"):
                     self.camera.move(0, 1, self.map.width, self.map.height)
-                    self.pan_pause = 240
-                elif key == ord("+"):
-                    self.camera.zoom_in()
-                    self.camera.move(0, 0, self.map.width, self.map.height)
-                    self.pan_pause = 240
-                elif key == ord("-"):
-                    self.camera.zoom_out()
-                    self.camera.move(0, 0, self.map.width, self.map.height)
-                    self.pan_pause = 240
-                elif ord("1") <= key <= ord("9"):
-                    self.camera.set_zoom_level(key - ord("1"))
-                    self.camera.move(0, 0, self.map.width, self.map.height)
                     self.pan_pause = 240
                 elif key == ord(" "):
                     self.paused = not self.paused
@@ -875,18 +913,6 @@ class Game:
                     self.pan_pause = 240
                 elif key == "s":
                     self.camera.move(0, 1, self.map.width, self.map.height)
-                    self.pan_pause = 240
-                elif key == "+":
-                    self.camera.zoom_in()
-                    self.camera.move(0, 0, self.map.width, self.map.height)
-                    self.pan_pause = 240
-                elif key == "-":
-                    self.camera.zoom_out()
-                    self.camera.move(0, 0, self.map.width, self.map.height)
-                    self.pan_pause = 240
-                elif key in "123456789":
-                    self.camera.set_zoom_level(int(key) - 1)
-                    self.camera.move(0, 0, self.map.width, self.map.height)
                     self.pan_pause = 240
                 elif key == " ":
                     self.paused = not self.paused
@@ -925,6 +951,8 @@ class Game:
         self._auto_upgrade()
         self._plan_townhall_progress()
         self._expand_housing()
+        self._random_watchtower()
+        self._check_watchtowers()
 
     def render(self) -> None:
         """Draw the current game state."""
@@ -964,7 +992,6 @@ class Game:
             f"Day:{self.world.day} "
             f"Time:{self.world.time_of_day} "
             f"Cam:{self.camera.x},{self.camera.y} "
-            f"Zoom:{self.camera.zoom} "
             f"Wood:{self.storage['wood']} "
             f"Stone:{self.storage['stone']} "
             f"Food:{self.storage['food']} "
@@ -988,15 +1015,14 @@ class Game:
             lines = [
                 "Controls:",
                 "WASD - move camera",
-                "+/- - zoom",
                 "space - pause",
                 ". - step",
                 "c - centre",
                 "h - toggle help",
                 "b - toggle buildings",
                 "q - quit",
-                "1-9 - set zoom",
                 "A - toggle thoughts",
+                "1-9 - switch village",
             ]
             self.renderer.render_help(lines, start_y=overlay_start)
             overlay_start += len(lines)
