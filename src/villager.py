@@ -20,7 +20,6 @@ from .constants import (
 )
 from .pathfinding import (
     find_nearest_resource,
-    find_path,
     find_path_fast,
     find_path_to_building_adjacent,
 )
@@ -127,9 +126,7 @@ class Villager:
         self.mood = levels[idx]
 
     # ------------------------------------------------------------------
-    def _move_away_from(
-        self, other: Tuple[int, int], game: "Game"
-    ) -> bool:
+    def _move_away_from(self, other: Tuple[int, int], game: "Game") -> bool:
         """Step one tile away from ``other`` if possible."""
 
         options = []
@@ -246,6 +243,8 @@ class Villager:
     def thought(self, game: "Game") -> str:
         if self.cooldown > 0:
             return "Waiting..."
+        if self.state == "sleep":
+            return "Sleeping"
         if self.state == "idle":
             return "Idle"
         if self.state == "gather":
@@ -302,9 +301,22 @@ class Villager:
         # enabled the optimised variant after 25k ticks which caused heavy CPU
         # load once several villagers were active early on.
         path_func = find_path_fast
-        if self.asleep:
+        # Wake up at dawn
+        if self.state == "sleep" and not game.world.is_night:
             self.asleep = False
             self.state = "idle"
+            self.target_path = []
+        # Head home when night falls
+        if game.world.is_night and self.home and self.state != "sleep":
+            path = path_func(
+                self.position,
+                self.home,
+                game.map,
+                game.buildings,
+                search_limit=game.get_search_limit(),
+            )
+            self.target_path = path[1:]
+            self.state = "sleep"
         if self.life_stage is LifeStage.RETIRED:
             for v in game.entities:
                 if v is not self and abs(v.x - self.x) <= 1 and abs(v.y - self.y) <= 1:
@@ -323,6 +335,9 @@ class Villager:
         if self._avoid_nearby_villagers(game):
             return
         if self.state == "idle":
+            if random.random() < 0.2:
+                self._wander(game)
+                return
             job = game.dispatch_job(self)
             if not job:
                 self.adjust_mood(-1)
@@ -366,7 +381,9 @@ class Villager:
                     spacing=3,
                     area=10,
                 )
-                if pos is None or not game.reserve_resource(pos, self.id, resource_type):
+                if pos is None or not game.reserve_resource(
+                    pos, self.id, resource_type
+                ):
                     self._wander(game)
                     return
                 self.resource_type = resource_type
@@ -567,6 +584,21 @@ class Villager:
                     # Stay in build state to continue working on the same building
                     return
                 self.state = "idle"
+        if self.state == "sleep":
+            if self.position != self.home:
+                if not self.target_path:
+                    path = path_func(
+                        self.position,
+                        self.home,
+                        game.map,
+                        game.buildings,
+                        search_limit=game.get_search_limit(),
+                    )
+                    self.target_path = path[1:]
+                self._move_step(game)
+            else:
+                self.asleep = True
+            return
 
     @property
     def x(self) -> int:
