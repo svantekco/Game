@@ -447,6 +447,20 @@ class Villager:
                         self.inventory[res] = 0
                 self.adjust_mood(1)
                 self.cooldown = self._action_delay(game, VILLAGER_ACTION_DELAY)
+                # Once enough wood has been stockpiled for the very first house,
+                # stop gathering and allow a build job to be assigned.
+                if (
+                    game._count_buildings("House") == 0
+                    and game.storage["wood"] >= game.house_threshold
+                ):
+                    if self.target_resource:
+                        game.release_resource(self.target_resource)
+                        self.reservations.pop(self.resource_type, None)
+                    self.target_resource = None
+                    self.resource_type = None
+                    self.state = "idle"
+                    self.target_path = []
+                    return
                 if (
                     self.target_resource
                     and game.map.get_tile(*self.target_resource).resource_amount > 0
