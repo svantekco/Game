@@ -613,7 +613,10 @@ class Game:
 
         # Before any houses exist, prioritise wood gathering so the first
         # villager works toward building initial shelter.
-        if self._count_buildings("House") == 0 and self.storage["wood"] < self.house_threshold:
+        if (
+            self._count_buildings("House") == 0
+            and self.storage["wood"] < self.house_threshold
+        ):
             return Job("gather", TileType.TREE)
 
         # Role specific default tasks
@@ -702,6 +705,30 @@ class Game:
         """Enqueue buildings and upgrades required for the next Town Hall level."""
         if self.build_queue:
             return
+        # Ensure a Marketplace is built once a market zone exists
+        if ZoneType.MARKET in self.zones and not any(
+            b.blueprint.name == "Marketplace" for b in self.buildings
+        ):
+            bp = self.blueprints.get("Marketplace")
+            if (
+                bp
+                and self.storage["wood"] >= bp.wood
+                and self.storage["stone"] >= bp.stone
+                and not any(b.blueprint.name == "Marketplace" for b in self.build_queue)
+            ):
+                zone = self.zones.get(ZoneType.MARKET)
+                pos = self.find_build_site(bp, zone)
+                if pos is None and zone is not None:
+                    self._expand_zone(zone)
+                    pos = self.find_build_site(bp, zone)
+                if pos:
+                    self.storage["wood"] -= bp.wood
+                    self.storage["stone"] -= bp.stone
+                    building = Building(bp, pos)
+                    self.build_queue.append(building)
+                    self.buildings.append(building)
+                    self._assign_builder(building, Role.BUILDER)
+                    return
         reqs = self._townhall_requirements()
         # Build additional structures if counts are too low
         for name, count in reqs.items():
