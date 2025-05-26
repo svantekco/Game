@@ -13,4 +13,7 @@ BLUEPRINT = BuildingBlueprint(
     stone=20,
     capacity_bonus=50,
     passable=True,
+    unlocked_by_townhall_level=1,
+    foundation_wood=5,
+    foundation_stone=5,
 )

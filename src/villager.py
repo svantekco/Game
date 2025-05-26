@@ -587,33 +587,94 @@ class Villager:
             if self.target_building and (
                 abs(self.position[0] - self.target_building.position[0])
                 + abs(self.position[1] - self.target_building.position[1])
-                == 1
+                == 1 # Villager is adjacent to the build site
             ):
-                self.target_building.progress += 1
-                self.adjust_mood(1)
-                self.cooldown = self._action_delay(game, VILLAGER_ACTION_DELAY)
-                if self.target_building.complete:
-                    self.target_building.passable = (
-                        self.target_building.blueprint.passable
-                    )
-                    if self.target_building in game.build_queue:
-                        game.build_queue.remove(self.target_building)
-                    # Remove any queued build jobs for this now-complete building
-                    game.jobs = [
-                        j for j in game.jobs if j.payload is not self.target_building
-                    ]
-                    self.target_building.builder_id = None
-                    if self.target_building.blueprint.name == "Storage":
-                        game.storage_capacity += self.target_building.blueprint.capacity_bonus
-                    if self.target_building.blueprint.name == "House":
-                        game.schedule_spawn(self.target_building.position)
-                else:
-                    from .game import Job
+                building = self.target_building
+                blueprint = building.blueprint
 
-                    game.jobs.append(Job("build", self.target_building))
-                    # Stay in build state to continue working on the same building
+                # Handle cases where build_time is 0 (instant build)
+                if blueprint.build_time <= 0:
+                    building.construction_stage = "complete"
+                    building.progress = blueprint.build_time # Ensure progress is maxed
+                    # Fall through to "complete" stage logic immediately
+
+                if building.construction_stage == "foundation":
+                    building.progress += 1
+                    self.adjust_mood(1)
+                    self.cooldown = self._action_delay(game, VILLAGER_ACTION_DELAY)
+
+                    foundation_duration = blueprint.build_time * 0.25
+                    if building.progress >= foundation_duration:
+                        # Check for main construction resources
+                        if game.storage['wood'] >= blueprint.wood and \
+                           game.storage['stone'] >= blueprint.stone:
+                            game.storage['wood'] -= blueprint.wood
+                            game.storage['stone'] -= blueprint.stone
+                            building.construction_stage = "main_construction"
+                            building.progress = 0 # Reset progress for the new stage
+                            game.log_event(f"{blueprint.name} foundation complete. Starting main construction.")
+                        else:
+                            # Not enough main resources, pause construction
+                            self.state = "idle"
+                            building.builder_id = None # Release builder
+                            # Re-add job to queue. Need Job class.
+                            from .game import Job 
+                            game.jobs.append(Job("build", building)) 
+                            game.log_event(f"Paused {blueprint.name}: needs main materials.")
+                            self.target_building = None # Clear target
+                    return # Action taken for this tick
+
+                elif building.construction_stage == "main_construction":
+                    building.progress += 1
+                    self.adjust_mood(1)
+                    self.cooldown = self._action_delay(game, VILLAGER_ACTION_DELAY)
+
+                    main_construction_duration = blueprint.build_time * 0.75
+                    if building.progress >= main_construction_duration:
+                        building.construction_stage = "complete"
+                        # Final completion logic will be handled in the "complete" block next
+                    else: # Still in main construction
+                        return # Action taken for this tick
+
+                if building.construction_stage == "complete":
+                    # This block is reached if foundation completes and instantly moves to main, 
+                    # and main completes in the same tick (e.g. if build_time was very small or 0),
+                    # or if it was already complete.
+                    building.passable = blueprint.passable
+                    if building in game.build_queue:
+                        game.build_queue.remove(building)
+                    
+                    # Remove any build jobs for this specific building instance
+                    game.jobs = [j for j in game.jobs if j.payload is not building]
+                    
+                    building.builder_id = None
+                    if blueprint.name == "Storage":
+                        game.storage_capacity += blueprint.capacity_bonus
+                        game.log_event(f"Storage L{building.level} complete! New capacity: {game.storage_capacity}")
+                    elif blueprint.name == "House":
+                        # game.schedule_spawn(building.position) # Spawning is handled by game._daily_update and _handle_births
+                        game.log_event(f"House L{building.level} complete!")
+                    else:
+                         game.log_event(f"{blueprint.name} L{building.level} complete!")
+
+                    self.state = "idle"
+                    self.target_building = None
+                    return # Action taken
+
+                # If somehow still in build state but target is complete (e.g. another builder finished it)
+                # This is an additional safeguard.
+                if building.complete : # Uses the property which checks construction_stage
+                    self.state = "idle"
+                    self.target_building = None
+                    # Remove job if it was assigned to this villager specifically
+                    game.jobs = [j for j in game.jobs if not (j.payload is building and j.target_villager == self.id)]
                     return
-                self.state = "idle"
+
+            # If not adjacent, but has target_building (implies still moving or pathfinding issue)
+            # This part of the original logic for pathfinding seems fine.
+            # If target_building is None, it will fall through to idle or wander.
+            return 
+            
         if self.state == "sleep":
             building = next(
                 (b for b in game.buildings if b.position == self.home), None

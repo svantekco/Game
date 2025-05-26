@@ -22,6 +22,9 @@ class BuildingBlueprint:
     capacity_bonus: int = 0
     # If True the completed building can be walked over
     passable: bool = False
+    unlocked_by_townhall_level: int = 1
+    foundation_wood: int = 0
+    foundation_stone: int = 0
 
 
 @dataclass
@@ -37,6 +40,7 @@ class Building:
     capacity: int = 0
     efficiency: float = 1.0
     builder_id: int | None = None
+    construction_stage: str = "complete"
 
     def __post_init__(self) -> None:
         """Initialise stats from the blueprint."""
@@ -67,21 +71,34 @@ class Building:
 
     @property
     def complete(self) -> bool:
-        return self.progress >= self.blueprint.build_time
+        return self.construction_stage == "complete"
 
     # ------------------------------------------------------------------
     def glyph_for_progress(self) -> tuple[str, Color]:
         """Return a glyph and colour based on construction progress."""
 
-        if self.complete or self.blueprint.build_time <= 0:
+        if self.construction_stage == "complete" or self.blueprint.build_time <= 0:
             return self.blueprint.glyph, self.blueprint.color
 
-        ratio = self.progress / self.blueprint.build_time
-        if ratio < 1 / 3:
-            glyph = "."
-        elif ratio < 2 / 3:
-            glyph = "+"
-        else:
-            glyph = self.blueprint.glyph.lower()
-
-        return glyph, self.blueprint.color
+        if self.construction_stage == "foundation":
+            # Assuming foundation is 25% of total build time
+            ratio = self.progress / (self.blueprint.build_time * 0.25)
+            if ratio < 0.5:
+                glyph = "x"
+            else:
+                glyph = "X"
+            return glyph, Color.RED
+        
+        if self.construction_stage == "main_construction":
+            # Assuming main construction is 75% of total build time
+            ratio = self.progress / (self.blueprint.build_time * 0.75)
+            if ratio < 1/3:
+                glyph = "."
+            elif ratio < 2/3:
+                glyph = "+"
+            else:
+                glyph = self.blueprint.glyph.lower()
+            return glyph, self.blueprint.color
+        
+        # Should not happen, but as a fallback
+        return self.blueprint.glyph, self.blueprint.color

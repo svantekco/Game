@@ -11,4 +11,7 @@ BLUEPRINT = BuildingBlueprint(
     color=Color.BUILDING,
     wood=30,
     stone=5,
+    unlocked_by_townhall_level=3,
+    foundation_wood=10,
+    foundation_stone=0,
 )

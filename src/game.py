@@ -333,7 +333,16 @@ class Game:
             return
         if self.build_queue:
             return
+
+        th = self._townhall()
         road_bp = self.blueprints["Road"]
+
+        # Check if Road is unlocked
+        if th.level < road_bp.unlocked_by_townhall_level:
+            self.tile_usage.clear() # Clear usage if roads can't be built
+            self._last_road_plan_day = self.world.day # Still mark as planned for today
+            return
+
         if self.storage["stone"] < road_bp.stone:
             self.tile_usage.clear()
             self._last_road_plan_day = self.world.day
@@ -348,13 +357,41 @@ class Game:
             tile = self.map.get_tile(x, y)
             if not tile.passable:
                 continue
-            if any(b.position == (x, y) for b in self.buildings):
+            if any(b.position == (x, y) for b in self.buildings + self.build_queue): # Check build_queue too
                 continue
+
+            # Check for foundation resources
+            if road_bp.foundation_stone > self.storage["stone"] or road_bp.foundation_wood > self.storage["wood"]:
+                # Not enough foundation resources for this specific road, try next candidate or stop
+                # This check is simplified; a more complex project might try to gather these.
+                # For roads, if foundation can't be laid, we probably stop for this candidate.
+                continue 
+            
             building = Building(road_bp, (x, y))
-            self.storage["stone"] -= road_bp.stone
+            
+            if road_bp.foundation_wood > 0 or road_bp.foundation_stone > 0:
+                self.storage["wood"] -= road_bp.foundation_wood
+                self.storage["stone"] -= road_bp.foundation_stone
+                building.construction_stage = "foundation"
+            elif road_bp.build_time > 0 : # No foundation, but has build time, pay main costs
+                if self.storage["wood"] < road_bp.wood or self.storage["stone"] < road_bp.stone:
+                    continue # Not enough main resources for a no-foundation build
+                self.storage["wood"] -= road_bp.wood
+                self.storage["stone"] -= road_bp.stone
+                building.construction_stage = "main_construction"
+            else: # No foundation, no build time
+                # Main costs should still be paid for instant build if not zero
+                if self.storage["wood"] < road_bp.wood or self.storage["stone"] < road_bp.stone:
+                    continue 
+                self.storage["wood"] -= road_bp.wood
+                self.storage["stone"] -= road_bp.stone
+                building.construction_stage = "complete"
+                building.progress = building.blueprint.build_time # Mark as complete
+
             self.build_queue.append(building)
             self.buildings.append(building)
-            self._assign_builder(building, Role.ROAD_PLANNER)
+            if building.construction_stage != "complete":
+                self._assign_builder(building, Role.ROAD_PLANNER)
         self.tile_usage.clear()
         self._last_road_plan_day = self.world.day
 
@@ -615,13 +652,25 @@ class Game:
                     if villager.role is Role.LABOURER:
                         return self.jobs.pop(i)
 
-        # Before any houses exist, prioritise wood gathering so the first
-        # villager works toward building initial shelter.
-        if (
-            self._count_buildings("House") == 0
-            and self.storage["wood"] < self.house_threshold
-        ):
-            return Job("gather", TileType.TREE)
+        th = self._townhall()
+        house_bp = self.blueprints.get("House")
+
+        # Before any houses exist, prioritise wood gathering if House is unlocked.
+        if house_bp and th.level >= house_bp.unlocked_by_townhall_level:
+            if (
+                self._count_buildings("House") == 0
+                and self.storage["wood"] < self.house_threshold 
+            ):
+                # Check if a house is already in the build queue by a different builder
+                # to avoid over-gathering if the planner hasn't caught up.
+                is_house_in_queue = any(
+                    job.type == "build" and job.payload and job.payload.blueprint.name == "House"
+                    for job in self.jobs
+                )
+                if not is_house_in_queue and not any(b.blueprint.name == "House" for b in self.build_queue):
+                     # Check if villager is already building a house
+                    if not (villager.current_job and villager.current_job.type == "build" and villager.current_job.payload.blueprint.name == "House"):
+                        return Job("gather", TileType.TREE)
 
         # Role specific default tasks
         if villager.role is Role.WOODCUTTER:
@@ -631,13 +680,29 @@ class Game:
         if villager.role in (Role.BUILDER, Role.ROAD_PLANNER):
             return None
 
-        # Ensure we always have enough resources to build new storage
-        storage_bp = self.blueprints["Storage"]
-        if self.storage["wood"] < storage_bp.wood:
-            return Job("gather", TileType.TREE)
-        if self.storage["stone"] < storage_bp.stone:
-            return Job("gather", TileType.ROCK)
+        # Ensure we always have enough resources to build new storage if it's unlocked
+        storage_bp = self.blueprints.get("Storage")
+        if storage_bp and th.level >= storage_bp.unlocked_by_townhall_level:
+            if self.storage["wood"] < storage_bp.wood:
+                 # Check if storage is already in queue by another builder
+                is_storage_in_queue = any(
+                    job.type == "build" and job.payload and job.payload.blueprint.name == "Storage"
+                    for job in self.jobs
+                )
+                if not is_storage_in_queue and not any(b.blueprint.name == "Storage" for b in self.build_queue):
+                    if not (villager.current_job and villager.current_job.type == "build" and villager.current_job.payload.blueprint.name == "Storage"):
+                        return Job("gather", TileType.TREE)
+            
+            if self.storage["stone"] < storage_bp.stone:
+                is_storage_in_queue = any(
+                    job.type == "build" and job.payload and job.payload.blueprint.name == "Storage"
+                    for job in self.jobs
+                )
+                if not is_storage_in_queue and not any(b.blueprint.name == "Storage" for b in self.build_queue):
+                     if not (villager.current_job and villager.current_job.type == "build" and villager.current_job.payload.blueprint.name == "Storage"):
+                        return Job("gather", TileType.ROCK)
 
+        # General resource thresholds - these should be fine as they are not tied to a specific building plan.
         if self.storage["wood"] < self.wood_threshold:
             return Job("gather", TileType.TREE)
 
@@ -662,21 +727,44 @@ class Game:
             if b.blueprint.name == name and b.level >= min_level and b.complete
         )
 
-    def _townhall_requirements(self) -> Dict[str, int]:
-        """Return minimal building counts required for the next upgrade."""
-        th = self._townhall()
-        reqs: Dict[str, int] = {}
-        for bpname in self.blueprints:
-            if bpname in ("TownHall", "Road"):
-                continue
-            if self._count_buildings(bpname) > 0:
-                reqs[bpname] = th.level
-        return reqs
+    def _townhall_requirements(self) -> Dict[str, any]:
+        """Return specific requirements for the next Town Hall level upgrade."""
+        th_level = self._townhall().level
+        target_level = th_level + 1
+
+        if target_level == 2:
+            return {
+                "population": 2,
+                "buildings": {"House": 1, "Storage": 1},
+            }
+        elif target_level == 3:
+            return {
+                "population": 5,
+                "buildings": {"Farm": 1, "Lumberyard": 1, "Quarry": 1},
+            }
+        elif target_level == 4:
+            return {
+                "population": 10,
+                "buildings": {"Blacksmith": 1, "Marketplace": 1},
+            }
+        # Add more levels here if needed
+        return {}  # No requirements for further upgrades or if max level reached
 
     def _meets_townhall_requirements(self) -> bool:
-        reqs = self._townhall_requirements()
-        for name, cnt in reqs.items():
-            if self._count_buildings(name) < cnt:
+        """Check if current village state meets requirements for TH upgrade."""
+        requirements = self._townhall_requirements()
+        if not requirements:  # No requirements means max level or no more defined levels
+            return False # Cannot upgrade if no requirements are defined for next level
+
+        # Check population
+        required_pop = requirements.get("population", 0)
+        if len(self.entities) < required_pop:
+            return False
+
+        # Check buildings
+        required_buildings = requirements.get("buildings", {})
+        for name, count in required_buildings.items():
+            if self._count_buildings(name, min_level=1) < count:
                 return False
         return True
 
@@ -696,7 +784,14 @@ class Game:
     def _auto_upgrade(self) -> None:
         th = self._townhall()
         if self._can_upgrade(th) and self._meets_townhall_requirements():
+            old_level = th.level
             self._upgrade_building(th)
+            new_level = th.level
+            if new_level > old_level:
+                self.log_event(f"Town Hall upgraded to Level {new_level}!")
+                for bp_name, blueprint in self.blueprints.items():
+                    if blueprint.unlocked_by_townhall_level == new_level:
+                        self.log_event(f"{blueprint.name} is now available!")
             return
         for b in self.buildings:
             if b is th:
@@ -733,51 +828,114 @@ class Game:
                     self.buildings.append(building)
                     self._assign_builder(building, Role.BUILDER)
                     return
-        reqs = self._townhall_requirements()
-        # Build additional structures if counts are too low
-        for name, count in reqs.items():
-            built = [b for b in self.buildings if b.blueprint.name == name]
-            bp = self.blueprints[name]
-            if len(built) < count:
-                if (
-                    self.storage["wood"] >= bp.wood
-                    and self.storage["stone"] >= bp.stone
-                    and not any(b.blueprint.name == name for b in self.build_queue)
-                ):
+        th = self._townhall()
+        # Get requirements for the NEXT Town Hall level
+        requirements_for_next_level = self._townhall_requirements() 
+        
+        if not requirements_for_next_level: # Max level or no further requirements defined
+            return
+
+        required_buildings_for_next_th = requirements_for_next_level.get("buildings", {})
+
+        # Build additional structures if counts are too low for NEXT TH level requirements
+        for name, required_count in required_buildings_for_next_th.items():
+            bp = self.blueprints.get(name)
+            if not bp:
+                continue
+
+            # Check if the building is unlocked at the CURRENT Town Hall level
+            if th.level < bp.unlocked_by_townhall_level:
+                continue # Cannot build this yet
+
+            current_building_count = self._count_buildings(name)
+            
+            if current_building_count < required_count:
+                # Check if already in build queue
+                if any(b.blueprint.name == name for b in self.build_queue):
+                    continue
+
+                # Check if we have foundation resources if they are needed
+                has_foundation_resources = True
+                if bp.foundation_wood > 0 and self.storage["wood"] < bp.foundation_wood:
+                    has_foundation_resources = False
+                if bp.foundation_stone > 0 and self.storage["stone"] < bp.foundation_stone:
+                    has_foundation_resources = False
+
+                # If no foundation, check for main construction resources
+                has_main_resources_for_no_foundation_build = False
+                if bp.foundation_wood == 0 and bp.foundation_stone == 0:
+                    if self.storage["wood"] >= bp.wood and self.storage["stone"] >= bp.stone:
+                        has_main_resources_for_no_foundation_build = True
+                
+                if has_foundation_resources or has_main_resources_for_no_foundation_build:
                     zone_type = ZoneType.HOUSING if name == "House" else ZoneType.WORK
-                    zone = self.zones.get(zone_type)
-                    pos = self.find_build_site(bp, zone)
-                    if pos is None and zone is not None:
-                        self._expand_zone(zone)
-                        pos = self.find_build_site(bp, zone)
+                    target_zone = self.zones.get(zone_type)
+                    pos = self.find_build_site(bp, target_zone)
+                    if pos is None and target_zone is not None:
+                        self._expand_zone(target_zone)
+                        pos = self.find_build_site(bp, target_zone)
                     if pos:
-                        self.storage["wood"] -= bp.wood
-                        self.storage["stone"] -= bp.stone
                         building = Building(bp, pos)
+                        if bp.foundation_wood > 0 or bp.foundation_stone > 0:
+                            if has_foundation_resources:
+                                self.storage["wood"] -= bp.foundation_wood
+                                self.storage["stone"] -= bp.foundation_stone
+                                building.construction_stage = "foundation"
+                            else: # Should not happen due to check above, but as safeguard
+                                continue 
+                        elif has_main_resources_for_no_foundation_build: # No foundation, pay main costs
+                            self.storage["wood"] -= bp.wood
+                            self.storage["stone"] -= bp.stone
+                            building.construction_stage = "main_construction" if bp.build_time > 0 else "complete"
+                        else: # Should not happen
+                            continue
+                        
                         self.build_queue.append(building)
                         self.buildings.append(building)
                         self._assign_builder(building, Role.BUILDER)
                         return
-            for b in built:
-                if b.level < self._townhall().level and self._can_upgrade(b):
-                    self._upgrade_building(b)
+        
+        # Upgrade existing buildings if they are below current TH level (original logic)
+        # This part seems fine to keep, as it focuses on upgrading existing, unlocked buildings.
+        for name, _ in required_buildings_for_next_th.items(): # Iterate over required buildings
+            built = [b for b in self.buildings if b.blueprint.name == name and b.complete]
+            for b_inst in built:
+                if b_inst.level < th.level and self._can_upgrade(b_inst):
+                    self._upgrade_building(b_inst)
+                    self.log_event(f"Upgraded {b_inst.blueprint.name} to L{b_inst.level}.")
                     return
 
     def _next_upgrade_hint(self) -> List[str]:
         th = self._townhall()
-        reqs = self._townhall_requirements()
-        if not (self._can_upgrade(th) and self._meets_townhall_requirements()):
-            parts = []
-            for name, cnt in reqs.items():
-                have = self._count_buildings(name)
-                parts.append(f"{name}: {have}/{cnt}")
-            req_str = ", ".join(parts)
-            w, s = th.upgrade_cost()
-            return [
-                f"Next: TownHall -> L{th.level + 1} ({req_str})",
-                f"Cost W:{w} S:{s}",
-            ]
-        return ["TownHall ready to upgrade"]
+        target_level = th.level + 1
+        requirements = self._townhall_requirements() # This will be for target_level
+
+        if not requirements: # Max level or no more defined levels
+             return [f"TownHall L{th.level} (Max Level Reached)"]
+
+        if self._meets_townhall_requirements() and self._can_upgrade(th):
+            return [f"TownHall L{th.level} ready to upgrade to L{target_level}!"]
+
+        hint_lines = [f"Next TH Lvl: {target_level}"]
+
+        required_pop = requirements.get("population", 0)
+        current_pop = len(self.entities)
+        hint_lines.append(f"  Pop: {current_pop}/{required_pop}")
+
+        required_buildings = requirements.get("buildings", {})
+        for name, count in required_buildings.items():
+            current_count = self._count_buildings(name, min_level=1)
+            hint_lines.append(f"  {name}: {current_count}/{count}")
+
+        wood_cost, stone_cost = th.upgrade_cost()
+        hint_lines.append(f"  Cost W:{wood_cost} S:{stone_cost}")
+        
+        if not self._meets_townhall_requirements():
+            hint_lines.append("  (Requirements not met)")
+        elif not self._can_upgrade(th):
+            hint_lines.append("  (Not enough resources)")
+            
+        return hint_lines
 
     def _village_goals_hint(self) -> List[str]:
         """Return static high level village goals for display."""
@@ -793,24 +951,53 @@ class Game:
         """Construct additional houses when population hits capacity."""
         if self.build_queue:
             return
+        
+        th = self._townhall()
         house_bp = self.blueprints["House"]
+
+        # Check if House is unlocked
+        if th.level < house_bp.unlocked_by_townhall_level:
+            return
+
         houses = len([b for b in self.buildings if b.blueprint.name == "House"])
+        
+        # Determine resource availability
+        has_foundation_resources = True
+        if house_bp.foundation_wood > 0 and self.storage["wood"] < house_bp.foundation_wood:
+            has_foundation_resources = False
+        if house_bp.foundation_stone > 0 and self.storage["stone"] < house_bp.foundation_stone:
+            has_foundation_resources = False
+
+        has_main_resources_for_no_foundation_build = False
+        if house_bp.foundation_wood == 0 and house_bp.foundation_stone == 0:
+            if self.storage["wood"] >= house_bp.wood and self.storage["stone"] >= house_bp.stone:
+                has_main_resources_for_no_foundation_build = True
+
         if (
-            self.storage["wood"] >= house_bp.wood
-            and self.storage["stone"] >= house_bp.stone
-            and self.storage["wood"] > self.house_threshold
-            and len(self.entities) >= houses * house_bp.capacity
+            (has_foundation_resources or has_main_resources_for_no_foundation_build)
+            and self.storage["wood"] > self.house_threshold # This is an old threshold, consider if still needed
+            and len(self.entities) >= houses * house_bp.capacity # Check if more houses are needed
             and not any(b.blueprint.name == "House" for b in self.build_queue)
         ):
-            zone = self.zones.get(ZoneType.HOUSING)
-            pos = self.find_build_site(house_bp, zone)
-            if pos is None and zone is not None:
-                self._expand_zone(zone)
-                pos = self.find_build_site(house_bp, zone)
+            target_zone = self.zones.get(ZoneType.HOUSING)
+            pos = self.find_build_site(house_bp, target_zone)
+            if pos is None and target_zone is not None:
+                self._expand_zone(target_zone)
+                pos = self.find_build_site(house_bp, target_zone)
             if pos:
-                self.storage["wood"] -= house_bp.wood
-                self.storage["stone"] -= house_bp.stone
                 building = Building(house_bp, pos)
+                if house_bp.foundation_wood > 0 or house_bp.foundation_stone > 0:
+                    if has_foundation_resources:
+                        self.storage["wood"] -= house_bp.foundation_wood
+                        self.storage["stone"] -= house_bp.foundation_stone
+                        building.construction_stage = "foundation"
+                    else: continue # Not enough foundation resources
+                elif has_main_resources_for_no_foundation_build: # No foundation, pay main costs
+                    self.storage["wood"] -= house_bp.wood
+                    self.storage["stone"] -= house_bp.stone
+                    building.construction_stage = "main_construction" if house_bp.build_time > 0 else "complete"
+                else: continue # Should not happen
+
                 self.build_queue.append(building)
                 self.buildings.append(building)
                 self._assign_builder(building, Role.BUILDER)
@@ -1054,9 +1241,33 @@ class Game:
 
             progress_lines = []
             for b in self.build_queue:
-                if b.blueprint.build_time > 0:
-                    pct = int(100 * b.progress / b.blueprint.build_time)
-                    progress_lines.append(f"{b.blueprint.name} {pct}%")
+                if b.construction_stage == "complete": # Should not be in build_queue if complete, but safeguard
+                    continue
+
+                if b.blueprint.build_time <= 0: # Instant build
+                    progress_lines.append(f"{b.blueprint.name} (Complete)")
+                    continue
+
+                stage_name = ""
+                stage_progress_ticks = 0
+                total_stage_ticks = 0
+
+                if b.construction_stage == "foundation":
+                    stage_name = "Foundation"
+                    total_stage_ticks = b.blueprint.build_time * 0.25
+                elif b.construction_stage == "main_construction":
+                    stage_name = "Main"
+                    total_stage_ticks = b.blueprint.build_time * 0.75
+                
+                stage_progress_ticks = b.progress
+
+                if total_stage_ticks > 0:
+                    pct = int(100 * stage_progress_ticks / total_stage_ticks)
+                    progress_lines.append(f"{b.blueprint.name} ({stage_name}) {pct}%")
+                elif b.blueprint.build_time > 0 : # Has build time but current stage has 0 duration (e.g. main_construction after foundation if foundation was 100% of time)
+                     progress_lines.append(f"{b.blueprint.name} ({stage_name}) -") # Or some other indicator
+                # else: for build_time == 0 it's handled above
+
             if progress_lines:
                 self.renderer.render_overlay(progress_lines, start_y=overlay_start)
                 overlay_start += len(progress_lines)
